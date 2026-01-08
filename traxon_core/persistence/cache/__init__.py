@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -14,10 +13,6 @@ class Cache(Protocol):
 
     async def load(self, key: str) -> Any | None:
         """Load data from the cache."""
-        ...
-
-    async def load_if_recent(self, key: str, max_age: timedelta) -> Any | None:
-        """Load data if it's not older than max_age."""
         ...
 
     async def delete(self, key: str) -> None:
