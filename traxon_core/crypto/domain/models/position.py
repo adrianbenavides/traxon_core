@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
@@ -7,8 +8,15 @@ from beartype import beartype
 from ccxt.base.types import Market as CcxtMarket  # type: ignore[import-untyped]
 from ccxt.base.types import Position as CcxtPosition
 
+from traxon_core.dates import to_datetime
+
 from .exchange_id import ExchangeId
 from .order import OrderSide
+
+
+class PositionType(str, Enum):
+    SPOT = "spot"
+    PERP = "perp"
 
 
 class PositionSide(str, Enum):
@@ -31,29 +39,69 @@ class PositionSide(str, Enum):
         return OrderSide.SELL
 
 
-@dataclass
+@dataclass(frozen=True)
 class Position:
     """Represents a trading position."""
 
     market: CcxtMarket
     exchange_id: ExchangeId
+    type: PositionType
+    side: PositionSide
+    size: Decimal
+    contract_size: Decimal
     current_price: Decimal
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
+    @classmethod
     @beartype
-    def side(self) -> PositionSide:
-        raise NotImplementedError
+    def from_spot(
+        cls,
+        market: CcxtMarket,
+        exchange_id: ExchangeId,
+        size: Decimal,
+        current_price: Decimal,
+    ) -> "Position":
+        """Create a spot Position instance."""
+        return cls(
+            market=market,
+            exchange_id=exchange_id,
+            type=PositionType.SPOT,
+            side=PositionSide.LONG,
+            size=size,
+            contract_size=Decimal("1"),
+            current_price=current_price,
+        )
 
+    @classmethod
     @beartype
-    def size(self) -> Decimal:
-        raise NotImplementedError
+    def from_perp(
+        cls,
+        market: CcxtMarket,
+        exchange_id: ExchangeId,
+        current_price: Decimal,
+        ccxt_position: CcxtPosition,
+    ) -> "Position":
+        """Create a perp Position instance from a CCXT position dictionary."""
+        size = Decimal(str(ccxt_position.get("contracts", 0)))
+        contract_size = Decimal(str(market.get("contractSize", 1)))
+        side = PositionSide.LONG if ccxt_position.get("side") == "long" else PositionSide.SHORT
+
+        return cls(
+            market=market,
+            exchange_id=exchange_id,
+            type=PositionType.PERP,
+            side=side,
+            size=size,
+            contract_size=contract_size,
+            current_price=current_price,
+            created_at=to_datetime(ccxt_position.get("datetime", None)),
+            updated_at=to_datetime(ccxt_position.get("lastTradeDatetime", None)),
+        )
 
     @beartype
     def notional_size(self) -> Decimal:
-        return self.size() * self.contract_size()
-
-    @beartype
-    def contract_size(self) -> Decimal:
-        raise NotImplementedError
+        return self.size * self.contract_size
 
     @beartype
     def value(self) -> Decimal:
@@ -62,62 +110,12 @@ class Position:
     @beartype
     def to_df_dict(self) -> dict[str, Any]:
         return {
-            "symbol": f"{self.market['symbol']}@{self.exchange_id}",
+            "symbol": f"{self.market['symbol']}@{self.exchange_id.value}",
+            "type": self.type.value,
+            "side": self.side.value,
+            "size": self.size,
             "price": self.current_price,
-        }
-
-
-@dataclass
-class SpotPosition(Position):
-    amount: Decimal
-
-    @beartype
-    def side(self) -> PositionSide:
-        return PositionSide.LONG
-
-    @beartype
-    def size(self) -> Decimal:
-        return self.amount
-
-    @beartype
-    def contract_size(self) -> Decimal:
-        return Decimal("1")
-
-    @beartype
-    def to_df_dict(self) -> dict[str, Any]:
-        return {
-            **super().to_df_dict(),
-            "side": self.side().value,
-            "size": self.size(),
             "value": self.value(),
-            "created_at": None,
-            "updated_at": None,
-        }
-
-
-@dataclass
-class PerpPosition(Position):
-    inner: CcxtPosition
-
-    @beartype
-    def size(self) -> Decimal:
-        return Decimal(str(self.inner.get("contracts", "0")))
-
-    @beartype
-    def contract_size(self) -> Decimal:
-        return Decimal(str(self.inner.get("contractSize", "1")))
-
-    @beartype
-    def side(self) -> PositionSide:
-        return PositionSide.LONG if self.inner["side"] == "long" else PositionSide.SHORT
-
-    @beartype
-    def to_df_dict(self) -> dict[str, Any]:
-        return {
-            **super().to_df_dict(),
-            "side": self.side().value,
-            "size": self.size(),
-            "value": self.value(),
-            "created_at": self.inner.get("datetime", None),
-            "updated_at": self.inner.get("lastTradeDatetime", None),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }

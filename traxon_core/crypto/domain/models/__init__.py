@@ -1,5 +1,5 @@
 from traxon_core.crypto.domain.models.account import AccountEquity
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId, KnownExchange
+from traxon_core.crypto.domain.models.exchange_id import ExchangeId
 from traxon_core.crypto.domain.models.order import (
     DynamicSizeOrderBuilder,
     OrderBuilder,
@@ -11,19 +11,16 @@ from traxon_core.crypto.domain.models.order import (
     SizedOrderBuilder,
 )
 from traxon_core.crypto.domain.models.position import (
-    PerpPosition,
     Position,
     PositionSide,
-    SpotPosition,
+    PositionType,
 )
-from traxon_core.crypto.domain.models.strategy_order import FundingRateOrder
 from traxon_core.crypto.domain.models.symbol import BaseQuoteSymbol, Symbol
 from traxon_core.crypto.domain.models.timeframe import Timeframe
 
 __all__ = [
     "AccountEquity",
     "ExchangeId",
-    "KnownExchange",
     "OrderSide",
     "OrderBuilder",
     "SizedOrderBuilder",
@@ -32,11 +29,9 @@ __all__ = [
     "OrderSizingStrategyFixed",
     "OrderSizingStrategyInverseVolatility",
     "OrderExecutionType",
-    "PerpPosition",
     "PositionSide",
-    "SpotPosition",
+    "PositionType",
     "Position",
-    "FundingRateOrder",
     "Symbol",
     "BaseQuoteSymbol",
     "Timeframe",
