@@ -1,0 +1,87 @@
+[project]
+name = "traxon-core"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.13.3",
+    "asyncio>=4.0.0",
+    "beartype>=0.22.9",
+    "exchange-calendars>=4.12",
+    "pandas>=2.3.3",
+    "polars>=1.36.1",
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
+    "structlog>=25.5.0",
+]
+
+[dependency-groups]
+dev = [
+  "hypothesis>=6.123.17",
+  "mypy>=1.17.1",
+  "pandas-stubs>=2.3.2.250827",
+  "pydocstyle>=6.3.0",
+  "pytest>=8.4.1",
+  "pytest-asyncio>=1.1.0",
+  "ruff>=0.12.11",
+  "types-pyyaml>=6.0.12.20250822",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["traxon_core"]
+
+[tool.poe.tasks]
+format = [
+  { cmd = "uv run ruff check --select I --fix" },
+  { cmd = "uv run ruff format" },
+]
+lint = [
+  "format",
+  { cmd = "uv run ruff check --select I" },
+  { cmd = "uv run ruff format --check" },
+  { ref = "lint-types" },
+  #  { ref = "lint-docs" },
+]
+lint-docs = "uv run pydocstyle --ignore-decorators=overload"
+lint-types = [{ cmd = "uv run mypy ." }]
+test = "uv run pytest tests -v"
+
+[tool.mypy]
+plugins = ['pydantic.mypy']
+python_version = "3.12"
+exclude = 'legacy_codebase'
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["exchange_calendars.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+exclude = ["legacy_codebase", "__pycache__", ".git", ".venv", "venv"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
