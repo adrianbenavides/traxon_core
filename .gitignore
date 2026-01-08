@@ -8,3 +8,13 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Testing-related files
+.hypothesis
+.coverage
+
+# Gemini-related files
+.gemini
+GEMINI.md
+.serena
+conductor
