@@ -76,6 +76,11 @@ strict_equality = true
 module = ["exchange_calendars.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
 [tool.ruff]
 line-length = 110
 target-version = "py312"
