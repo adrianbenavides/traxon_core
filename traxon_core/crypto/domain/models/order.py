@@ -14,7 +14,7 @@ from ccxt.base.types import Market  # type: ignore[import-untyped]
 from ccxt.base.types import OrderSide as OrderSideCcxt
 
 from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.symbol import BaseQuoteSymbol, Symbol
+from traxon_core.crypto.domain.models.symbol import BaseQuote, Symbol
 from traxon_core.logs.structlog import logger
 
 
@@ -374,14 +374,14 @@ class DynamicSizeOrderBuilder(OrderBuilder):
 class OrdersToExecute:
     """A list of orders to be executed. Updates will be handled first to free up capital for new orders."""
 
-    updates: dict[BaseQuoteSymbol, list[OrderBuilder]]
-    new: dict[BaseQuoteSymbol, list[OrderBuilder]]
+    updates: dict[BaseQuote, list[OrderBuilder]]
+    new: dict[BaseQuote, list[OrderBuilder]]
 
     @beartype
     def __init__(
         self,
-        updates: dict[BaseQuoteSymbol, list[OrderBuilder]],
-        new: dict[BaseQuoteSymbol, list[OrderBuilder]],
+        updates: dict[BaseQuote, list[OrderBuilder]],
+        new: dict[BaseQuote, list[OrderBuilder]],
     ) -> None:
         self.updates = updates
         self.new = new
@@ -417,16 +417,16 @@ class OrdersToExecute:
     @beartype
     def _validate_orders(
         self,
-        orders_by_base_quote_symbol: dict[BaseQuoteSymbol, list[OrderBuilder]],
+        orders_by_base_quote_symbol: dict[BaseQuote, list[OrderBuilder]],
         list_name: str = "orders",
-    ) -> dict[BaseQuoteSymbol, list[OrderBuilder]]:
+    ) -> dict[BaseQuote, list[OrderBuilder]]:
         """
         Assumptions:
             - Funding rate orders comes in pairs, so we can group them by base/quote symbol
             - If one leg of the pair is invalid, both legs are removed
             - There can't be more than one order per base/quote symbol
         """
-        base_quote_symbols_to_remove: dict[BaseQuoteSymbol, list[str]] = defaultdict(list)
+        base_quote_symbols_to_remove: dict[BaseQuote, list[str]] = defaultdict(list)
 
         for base_quote_symbol, orders in orders_by_base_quote_symbol.items():
             for order in orders:
@@ -434,7 +434,7 @@ class OrdersToExecute:
                 if err_reason:
                     base_quote_symbols_to_remove[base_quote_symbol].append(err_reason)
 
-        valid_orders: dict[BaseQuoteSymbol, list[OrderBuilder]] = defaultdict(list)
+        valid_orders: dict[BaseQuote, list[OrderBuilder]] = defaultdict(list)
         for base_quote_symbol, orders in orders_by_base_quote_symbol.items():
             if base_quote_symbol in base_quote_symbols_to_remove:
                 reasons = set(base_quote_symbols_to_remove[base_quote_symbol])
@@ -465,7 +465,7 @@ class OrdersToExecute:
                 update_order_keys.add(key)
 
         # Remove any new orders that are duplicates of update orders
-        cleaned_new: defaultdict[BaseQuoteSymbol, list[OrderBuilder]] = defaultdict(list)
+        cleaned_new: defaultdict[BaseQuote, list[OrderBuilder]] = defaultdict(list)
         for base_quote_symbol, orders in self.new.items():
             for order in orders:
                 key = f"{order.exchange_id}:{order.market}:{order.side}:{order.size()}"

@@ -15,7 +15,7 @@ from traxon_core.crypto.domain.models.position import (
     PositionSide,
     PositionType,
 )
-from traxon_core.crypto.domain.models.symbol import BaseQuoteSymbol, Symbol
+from traxon_core.crypto.domain.models.symbol import Symbol
 from traxon_core.crypto.domain.models.timeframe import Timeframe
 
 __all__ = [
@@ -33,6 +33,5 @@ __all__ = [
     "PositionType",
     "Position",
     "Symbol",
-    "BaseQuoteSymbol",
     "Timeframe",
 ]

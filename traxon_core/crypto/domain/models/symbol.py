@@ -1,6 +1,35 @@
+from dataclasses import dataclass
+
 from ccxt.base.types import Market  # type: ignore[import-untyped]
 
 equivalent_quotes = ["USDC", "USDT"]
+
+
+@dataclass(frozen=True)
+class BaseQuote:
+    """Internal comparable for matching symbols across Spot and Perp."""
+
+    base: str
+    quote: str
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, BaseQuote):
+            return False
+
+        # Core logic: Base must match
+        if self.base != other.base:
+            return False
+
+        # Quote logic: Either exact match OR both are in the "equivalent" list (USDT/USDC)
+        same_quote = self.quote == other.quote
+        both_equivalent = self.quote in equivalent_quotes and other.quote in equivalent_quotes
+
+        return same_quote or both_equivalent
+
+    def __hash__(self) -> int:
+        # Normalized hash so USDC and USDT versions produce the same key
+        quote_key = "USDX" if self.quote in equivalent_quotes else self.quote
+        return hash((self.base, quote_key))
 
 
 class Symbol:
@@ -27,6 +56,11 @@ class Symbol:
         self.base = base
         self.quote = parts2[0]
         self.settle = parts2[1] if len(parts2) > 1 else None
+
+    @property
+    def base_quote(self) -> BaseQuote:
+        """Returns a comparable object for cross-market matching."""
+        return BaseQuote(self.base, self.quote)
 
     @staticmethod
     def from_market(market: Market) -> "Symbol":
@@ -66,56 +100,3 @@ class Symbol:
         if settle:
             symbol = f"{symbol}:{settle}"
         return hash(symbol)
-
-
-class BaseQuoteSymbol:
-    """Represents a partial trading symbol (base, quote) to compare the same symbols in spot and perp markets."""
-
-    raw_symbol: str
-    base: str
-    quote: str
-
-    def __init__(self, source: object) -> None:
-        if isinstance(source, str):
-            self.raw_symbol = source
-        elif isinstance(source, Symbol):
-            self.raw_symbol = f"{source.base}/{source.quote}"
-        elif isinstance(source, dict):
-            self.raw_symbol = f"{source['base']}/{source['quote']}"
-
-        parts1 = self.raw_symbol.split("/")
-        base = parts1[0]
-        quote_settle = parts1[1]
-        parts2 = quote_settle.split(":")
-
-        self.base = base
-        self.quote = parts2[0]
-
-    @staticmethod
-    def from_market(market: Market) -> "BaseQuoteSymbol":
-        return BaseQuoteSymbol(f"{market['base']}/{market['quote']}")
-
-    @staticmethod
-    def from_symbol(symbol: Symbol) -> "BaseQuoteSymbol":
-        return BaseQuoteSymbol(f"{symbol.base}/{symbol.quote}")
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-    def __str__(self) -> str:
-        return f"{self.base}/{self.quote}"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, BaseQuoteSymbol):
-            return False
-
-        same_base = self.base == other.base
-        same_quote = self.quote == other.quote
-        equivalent_quote = self.quote in equivalent_quotes and other.quote in equivalent_quotes
-
-        return same_base and (same_quote or equivalent_quote)
-
-    def __hash__(self) -> int:
-        base = self.base
-        quote = self.quote if self.quote not in equivalent_quotes else "USDX"
-        return hash(f"{base}/{quote}")
