@@ -7,7 +7,7 @@ from ccxt.base.types import Market  # type: ignore[import-untyped]
 from ccxt.base.types import Position as CcxtPosition
 from ccxt.pro import Exchange as CcxtExchange
 
-from traxon_core.crypto.domain.models import Position, Symbol
+from traxon_core.crypto.domain.models import Balance, Position, Symbol
 from traxon_core.crypto.domain.models.account import AccountEquity
 from traxon_core.crypto.domain.models.exchange_id import ExchangeId
 from traxon_core.crypto.exchanges.api_patch import BaseExchangeApiPatch, ExchangeApiPatch
@@ -82,11 +82,28 @@ class Exchange:
         filtered_markets = self.api_patch.filter_markets(markets)
         return filtered_markets
 
-    async def fetch_spot_balances(self) -> dict[Symbol, Decimal]:
+    async def fetch_account_equity(self) -> AccountEquity:
         """
-        Fetches the spot balances for the exchange.
+        Returns the minimum of the available equity in perp/spot accounts.
         """
-        balances: dict[Symbol, Decimal] = dict()
+        res = await self.api.fetch_balance()
+        self.logger.debug(f"{self.id} - extracting account equity from {res}")
+        account_equity = self.api_patch.extract_account_equity(res)
+        self.logger.info(f"{self.id} - account equity: {account_equity}")
+        return account_equity
+
+    async def fetch_available_equity_for_trading(self) -> Decimal:
+        """
+        Returns the minimum of the available equity in perp/spot accounts.
+        """
+        account_equity = await self.fetch_account_equity()
+        return account_equity.minimum(self.spot_enabled, self.perp_enabled)
+
+    async def fetch_balances(self, symbols: list[Symbol] | None = None) -> list[Balance]:
+        """
+        Fetches the spot balances for the exchange, optionally filtered by symbols.
+        """
+        balances: list[Balance] = []
 
         markets = await self.api.load_markets()
         res = await self.api.fetch_balance(
@@ -99,13 +116,16 @@ class Exchange:
 
         if not symbols_str:
             self.logger.info(f"{self.api.id} - no spot balances found")
-            return dict()
+            return []
 
         self.logger.debug(f"{self.api.id} - fetching spot balances for symbols: {symbols_str}")
         tickers = await self.api.fetch_tickers(symbols_str)
 
         # Filter out symbols with not enough amount or value
         for symbol, amount in all_balances.items():
+            if symbols is not None and symbol not in symbols:
+                continue
+
             symbol_str = str(symbol)
             if symbol_str not in markets:
                 _log = f"{self.id} - symbol {symbol} not found in markets"
@@ -127,7 +147,15 @@ class Exchange:
             if min_cost is not None and value < min_cost:
                 continue
 
-            balances[symbol] = amount
+            balances.append(
+                Balance(
+                    market=market,
+                    exchange_id=self.id,
+                    symbol=symbol,
+                    size=amount,
+                    current_price=last_price,
+                )
+            )
 
         if balances:
             self.logger.info(f"{self.api.id} - spot balances: {balances}")
@@ -135,32 +163,6 @@ class Exchange:
             self.logger.info(f"{self.api.id} - no spot balances found")
 
         return balances
-
-    async def fetch_spot_balance(self, symbol: Symbol) -> Decimal:
-        """
-        Fetches the spot balance for a given symbol.
-        """
-        all_balances = await self.fetch_spot_balances()
-        amount = all_balances.get(symbol, Decimal(0))
-        self.logger.info(f"{self.id} - spot balance for {symbol}: {amount}")
-        return amount
-
-    async def fetch_available_equity_for_trading(self) -> Decimal:
-        """
-        Returns the minimum of the available equity in perp/spot accounts.
-        """
-        account_equity = await self.fetch_account_equity()
-        return account_equity.minimum(self.spot_enabled, self.perp_enabled)
-
-    async def fetch_account_equity(self) -> AccountEquity:
-        """
-        Returns the minimum of the available equity in perp/spot accounts.
-        """
-        res = await self.api.fetch_balance()
-        self.logger.debug(f"{self.id} - extracting account equity from {res}")
-        account_equity = self.api_patch.extract_account_equity(res)
-        self.logger.info(f"{self.id} - account equity: {account_equity}")
-        return account_equity
 
     async def fetch_positions(self, symbols: list[Symbol] | None = None) -> list[Position]:
         """
@@ -196,7 +198,7 @@ class Exchange:
             current_price = Decimal(str(last)) if last is not None else Decimal(0)
 
             positions.append(
-                Position.from_perp(
+                Position(
                     market=market,
                     exchange_id=self.id,
                     symbol=symbol,
@@ -206,38 +208,6 @@ class Exchange:
             )
 
         return positions
-
-    async def fetch_position(self, symbol: Symbol) -> Position | None:
-        """
-        Fetches a single position for the given symbol.
-        """
-        try:
-            market = self.api.markets[str(symbol)]
-            ticker = await self.api.fetch_ticker(str(symbol))
-            last = ticker.get("last", None)
-            current_price = Decimal(str(last)) if last is not None else Decimal(0)
-            if symbol.is_spot():
-                amount = await self.fetch_spot_balance(symbol)
-                return Position.from_spot(
-                    market=market,
-                    exchange_id=self.id,
-                    symbol=symbol,
-                    size=amount,
-                    current_price=current_price,
-                )
-            else:
-                ccxt_pos = await self.api.fetch_position(str(symbol))
-                return Position.from_perp(
-                    market=market,
-                    exchange_id=self.id,
-                    symbol=symbol,
-                    current_price=current_price,
-                    ccxt_position=ccxt_pos,
-                )
-
-        except Exception as e:
-            self.logger.error(f"{self.id} - error fetching position for {symbol}: {e}", exc_info=True)
-            return None
 
 
 class ExchangeFactory:
@@ -314,7 +284,7 @@ class ExchangeFactory:
                         _log = f"{exchange_id} - failed to load markets after {max_retries} attempts: {e}"
                         logger.error(_log, exc_info=True)
                         await notifier.notify(_log)
-                    raise
+                        raise
             exchanges.append(Exchange(exchange, api_patch, c))
 
         return exchanges
