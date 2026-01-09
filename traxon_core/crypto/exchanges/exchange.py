@@ -1,6 +1,5 @@
 import asyncio
 from decimal import Decimal
-from typing import Any
 
 import ccxt.pro as ccxt  # type: ignore[import-untyped]
 from ccxt.base.types import Market  # type: ignore[import-untyped]
@@ -27,7 +26,6 @@ class Exchange:
     leverage: int
     spot_enabled: bool
     perp_enabled: bool
-    logger: Any
 
     def __init__(
         self,
@@ -81,6 +79,15 @@ class Exchange:
 
         filtered_markets = self.api_patch.filter_markets(markets)
         return filtered_markets
+
+    def has_ws_support(self) -> bool:
+        """Check if the exchange supports WebSocket order execution."""
+        required_features: list[str] = ["ws", "watchOrderBook", "watchOrders"]
+        for feature in required_features:
+            if not self.api.has.get(feature, False):
+                self.logger.debug(f"{self.id} does not support {feature}")
+                return False
+        return True
 
     async def fetch_account_equity(self) -> AccountEquity:
         """
