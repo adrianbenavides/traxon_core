@@ -7,13 +7,14 @@ from typing import Any, Dict
 from beartype import beartype
 
 from traxon_core.crypto.exchanges.exchange import Exchange
+from traxon_core.crypto.models.order import OrderRequest
 from traxon_core.order_executor.base import OrderExecutorBase
 from traxon_core.order_executor.config import ExecutorConfig
 from traxon_core.order_executor.exceptions import (
     OrderCreationError,
     OrderExecutorError,
 )
-from traxon_core.order_executor.models import ElapsedSeconds, ExecutionReport, OrderRequest, OrderStatus
+from traxon_core.order_executor.models import ElapsedSeconds, ExecutionReport, OrderStatus
 
 
 class OrderState(Enum):

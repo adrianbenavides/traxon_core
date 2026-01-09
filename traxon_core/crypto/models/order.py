@@ -12,11 +12,101 @@ import polars as pl
 from beartype import beartype
 from ccxt.base.types import Market  # type: ignore[import-untyped]
 from ccxt.base.types import OrderSide as OrderSideCcxt
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from traxon_core.crypto.models.exchange_id import ExchangeId
-from traxon_core.crypto.models.symbol import BaseQuote, Symbol
+from traxon_core.crypto.models.symbol import BaseQuote
 from traxon_core.logs.notifiers import notifier
 from traxon_core.logs.structlog import logger
+
+
+class OrderType(str, Enum):
+    """Type of order to place."""
+
+    LIMIT = "limit"
+    MARKET = "market"
+
+
+class OrderPairing:
+    """Handles logic for paired orders via composition."""
+
+    success_event: asyncio.Event | None
+    failure_event: asyncio.Event | None
+
+    @beartype
+    def __init__(self) -> None:
+        self.success_event = None
+        self.failure_event = None
+
+    @beartype
+    def set_events(self, success_event: asyncio.Event, failure_event: asyncio.Event) -> None:
+        self.success_event = success_event
+        self.failure_event = failure_event
+
+    @beartype
+    def is_single(self) -> bool:
+        """Check if this order is a single order (not paired)."""
+        return self.success_event is None and self.failure_event is None
+
+    @beartype
+    def notify_filled(self) -> None:
+        """Signal that this order has been filled."""
+        if self.success_event:
+            logger.info("paired order filled - notifying")
+            self.success_event.set()
+
+    @beartype
+    def notify_failed(self) -> None:
+        """Signal that this order has failed execution."""
+        if self.failure_event:
+            logger.info("paired order failed - notifying")
+            self.failure_event.set()
+
+    @beartype
+    def is_pair_filled(self) -> bool:
+        """Check if the paired order has been filled."""
+        return self.success_event.is_set() if self.success_event else False
+
+    @beartype
+    def is_pair_failed(self) -> bool:
+        """Check if the paired order has failed."""
+        return self.failure_event.is_set() if self.failure_event else False
+
+    @beartype
+    async def wait_for_pair(self, timeout: timedelta | None = None) -> tuple[bool, bool]:
+        """
+        Wait for the paired order to be filled or failed.
+        Returns: (success, failure) tuple of booleans
+        """
+        if not self.success_event and not self.failure_event:
+            return False, False
+
+        tasks: list[asyncio.Task[Any]] = []
+        if self.success_event:
+            tasks.append(asyncio.create_task(self.success_event.wait()))
+        if self.failure_event:
+            tasks.append(asyncio.create_task(self.failure_event.wait()))
+
+        try:
+            if timeout:
+                done, pending = await asyncio.wait(
+                    tasks,
+                    timeout=timeout.total_seconds(),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+            else:
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+            return self.is_pair_filled(), self.is_pair_failed()
+        except Exception as e:
+            logger.error(f"error waiting for paired order: {e}")
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            return False, False
 
 
 class OrderSide(str, Enum):
@@ -40,6 +130,55 @@ class OrderSide(str, Enum):
 class OrderExecutionType(str, Enum):
     TAKER = "taker"
     MAKER = "maker"
+
+
+class OrderRequest(BaseModel):
+    """
+    Request to place an order.
+    """
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    symbol: str = Field(min_length=1, description="Trading symbol (e.g. BTC/USDT)")
+    side: OrderSide = Field(description="Order side (buy or sell)")
+    order_type: OrderType = Field(description="Type of order (limit or market)")
+    amount: Decimal = Field(gt=0, description="Amount to trade in base currency")
+    price: Decimal | None = Field(default=None, description="Limit price (required for limit orders)")
+    execution_type: OrderExecutionType = Field(description="Execution type (taker or maker)")
+    params: dict[str, str] = Field(
+        default_factory=dict,
+        description="Exchange-specific execution parameters",
+    )
+    exchange_id: ExchangeId = Field(description="Exchange identifier")
+    pairing: OrderPairing = Field(default_factory=OrderPairing, description="Pairing logic")
+    notes: str | None = Field(default=None, description="Internal notes")
+
+    @field_validator("amount", "price", mode="before")
+    @classmethod
+    @beartype
+    def convert_to_decimal(cls, v: float | Decimal | str | None) -> Decimal | None:
+        """Convert numeric values to Decimal for precision."""
+        if v is None:
+            return None
+        if isinstance(v, Decimal):
+            return v
+        return Decimal(str(v))
+
+    @model_validator(mode="after")
+    def validate_price_for_limit_orders(self) -> OrderRequest:
+        """Ensure price is present for limit orders."""
+        if self.order_type == OrderType.LIMIT and self.price is None:
+            raise ValueError("Price is required for limit orders")
+        return self
+
+
+class OrderValidationError(Exception):
+    """Raised when order validation fails before execution."""
+
+    def __init__(self, symbol: str, reason: str) -> None:
+        self.symbol = symbol
+        self.reason = reason
+        super().__init__(f"Order validation failed for {symbol}: {reason}")
 
 
 class OrderSizingType(str, Enum):
@@ -80,8 +219,7 @@ class OrderBuilder(ABC):
     notes: str | None
     side: OrderSide | None
     _value: Decimal | None
-    success_event: asyncio.Event | None
-    failure_event: asyncio.Event | None
+    pairing: OrderPairing
 
     @beartype
     def __init__(
@@ -97,8 +235,7 @@ class OrderBuilder(ABC):
         self.notes = notes
         self.side = None
         self._value = None
-        self.success_event = None
-        self.failure_event = None
+        self.pairing = OrderPairing()
 
     @abstractmethod
     @beartype
@@ -159,9 +296,17 @@ class OrderBuilder(ABC):
 
     @abstractmethod
     @beartype
-    def validate(self) -> str | None:
+    def build(self, current_price: Decimal | None = None) -> OrderRequest:
         """
-        Validates the order parameters and returns an error message if any.
+        Builds an OrderRequest from the builder.
+        """
+        ...
+
+    @abstractmethod
+    @beartype
+    def validate(self) -> None:
+        """
+        Validates the order parameters and raises OrderValidationError if invalid.
         """
         ...
 
@@ -174,75 +319,6 @@ class OrderBuilder(ABC):
             "notional": f"{self.notional_size():.4f}" if self.notional_size() is not None else None,
         }
         return data
-
-    # ==== Paired order methods
-
-    @beartype
-    def set_paired_events(self, success_event: asyncio.Event, failure_event: asyncio.Event) -> None:
-        self.success_event = success_event
-        self.failure_event = failure_event
-
-    @beartype
-    def is_single(self) -> bool:
-        """Check if this order is a single order (not paired)."""
-        return self.success_event is None and self.failure_event is None
-
-    @beartype
-    def notify_filled(self) -> None:
-        """Signal that this order has been filled."""
-        if self.success_event:
-            self.success_event.set()
-
-    @beartype
-    def notify_failed(self) -> None:
-        """Signal that this order has failed execution."""
-        if self.failure_event:
-            self.failure_event.set()
-
-    @beartype
-    def is_pair_filled(self) -> bool:
-        """Check if the paired order has been filled."""
-        return self.success_event.is_set() if self.success_event else False
-
-    @beartype
-    def is_pair_failed(self) -> bool:
-        """Check if the paired order has failed."""
-        return self.failure_event.is_set() if self.failure_event else False
-
-    @beartype
-    async def wait_for_pair(self, timeout: timedelta | None = None) -> tuple[bool, bool]:
-        """
-        Wait for the paired order to be filled or failed.
-        Returns: (success, failure) tuple of booleans
-        """
-        if not self.success_event and not self.failure_event:
-            return False, False
-
-        tasks: list[asyncio.Task[Any]] = []
-        if self.success_event:
-            tasks.append(asyncio.create_task(self.success_event.wait()))
-        if self.failure_event:
-            tasks.append(asyncio.create_task(self.failure_event.wait()))
-
-        try:
-            if timeout:
-                done, pending = await asyncio.wait(
-                    tasks,
-                    timeout=timeout.total_seconds(),
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for task in pending:
-                    task.cancel()
-            else:
-                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-                for task in pending:
-                    task.cancel()
-            return self.is_pair_filled(), self.is_pair_failed()
-        except Exception:
-            for task in tasks:
-                if not task.done():
-                    task.cancel()
-            return False, False
 
 
 class SizedOrderBuilder(OrderBuilder):
@@ -291,15 +367,36 @@ class SizedOrderBuilder(OrderBuilder):
         return self._size
 
     @beartype
-    def validate(self) -> str | None:
+    def build(self, current_price: Decimal | None = None) -> OrderRequest:
         """
-        Validates the order parameters and returns an error message if any.
+        Builds an OrderRequest from the builder.
+        """
+        self.validate()
+        order_type = OrderType.LIMIT if self.execution_type == OrderExecutionType.MAKER else OrderType.MARKET
+        return OrderRequest(
+            symbol=self.market["symbol"],
+            side=self.side,
+            order_type=order_type,
+            amount=self.size(),
+            price=current_price if order_type == OrderType.LIMIT else None,
+            execution_type=self.execution_type,
+            exchange_id=self.exchange_id,
+            pairing=self.pairing,
+            notes=self.notes,
+        )
+
+    @beartype
+    def validate(self) -> None:
+        """
+        Validates the order parameters and raises OrderValidationError if invalid.
         """
         min_size = self.min_size()
         if min_size is not None and self._size is not None:
             if self._size < min_size:
-                return f"minimum size not met (got {self._size:.4f}, min {min_size:.4f})"
-        return None
+                raise OrderValidationError(
+                    self.market["symbol"],
+                    f"minimum size not met (got {self._size:.4f}, min {min_size:.4f})",
+                )
 
     @beartype
     def to_df_dict(self) -> dict[str, str | None]:
@@ -346,9 +443,29 @@ class DynamicSizeOrderBuilder(OrderBuilder):
         return notional_size / self.contract_size()
 
     @beartype
-    def validate(self) -> str | None:
+    def build(self, current_price: Decimal | None = None) -> OrderRequest:
         """
-        Validates the order parameters and returns an error message if any.
+        Builds an OrderRequest from the builder.
+        """
+        self.validate()
+        price = current_price or self.sizing_strategy.current_price
+        order_type = OrderType.LIMIT if self.execution_type == OrderExecutionType.MAKER else OrderType.MARKET
+        return OrderRequest(
+            symbol=self.market["symbol"],
+            side=self.side,
+            order_type=order_type,
+            amount=self.size(price),
+            price=price if order_type == OrderType.LIMIT else None,
+            execution_type=self.execution_type,
+            exchange_id=self.exchange_id,
+            pairing=self.pairing,
+            notes=self.notes,
+        )
+
+    @beartype
+    def validate(self) -> None:
+        """
+        Validates the order parameters and raises OrderValidationError if invalid.
         """
         # Example: min_cost = 5 USDT; current_price = 2.000 XRP/USDT
         # min_cost_size = min_cost / current_price = 2.5 XRP
@@ -357,12 +474,14 @@ class DynamicSizeOrderBuilder(OrderBuilder):
             min_cost_size = min_cost / self.sizing_strategy.current_price / self.contract_size()
             size = self.size(self.sizing_strategy.current_price)
             if size is not None and size < min_cost_size:
-                return (
-                    f"minimum cost size not met (got {size:.4f}, "
-                    f"min size {min_cost_size:.4f}, min cost {min_cost:.4f}, "
-                    f"current price {self.sizing_strategy.current_price:.4f})"
+                raise OrderValidationError(
+                    self.market["symbol"],
+                    (
+                        f"minimum cost size not met (got {size:.4f}, "
+                        f"min size {min_cost_size:.4f}, min cost {min_cost:.4f}, "
+                        f"current price {self.sizing_strategy.current_price:.4f})"
+                    ),
                 )
-        return None
 
     @beartype
     def to_df_dict(self) -> dict[str, str | None]:
@@ -373,10 +492,17 @@ class DynamicSizeOrderBuilder(OrderBuilder):
 
 
 class OrdersToExecute:
-    """A list of orders to be executed. Updates will be handled first to free up capital for new orders."""
+    """
+    A list of orders to be executed.
 
-    updates: dict[BaseQuote, list[OrderBuilder]]
-    new: dict[BaseQuote, list[OrderBuilder]]
+    Processing flow:
+    1. Validates OrderBuilder objects and converts them to OrderRequest objects.
+    2. Prioritizes 'updates' (existing position adjustments) over 'new' orders.
+    3. Deduplicates 'new' orders against 'updates' to avoid redundant operations.
+    """
+
+    updates: dict[BaseQuote, list[OrderRequest]]
+    new: dict[BaseQuote, list[OrderRequest]]
 
     @beartype
     def __init__(
@@ -384,9 +510,9 @@ class OrdersToExecute:
         updates: dict[BaseQuote, list[OrderBuilder]],
         new: dict[BaseQuote, list[OrderBuilder]],
     ) -> None:
-        self.updates = updates
-        self.new = new
-        self.validate_orders()
+        self.updates = self._process_orders(updates, "updates")
+        self.new = self._process_orders(new, "new")
+        self._deduplicate_new_orders()
 
     @beartype
     def count(self) -> int:
@@ -394,108 +520,82 @@ class OrdersToExecute:
             len(orders) for orders in self.new.values()
         )
 
-    @staticmethod
     @beartype
-    def _validate_min_size(order: OrderBuilder) -> bool:
-        min_size = order.min_size()
-        size = order.size()
-        if min_size is not None and size is not None:
-            if size < min_size:
-                return False
-        return True
-
-    @staticmethod
-    @beartype
-    def _validate_min_cost(order: OrderBuilder) -> bool:
-        if isinstance(order, DynamicSizeOrderBuilder):
-            min_cost = order.min_cost()
-            size = order.size()
-            if min_cost is not None and size is not None:
-                if size * order.sizing_strategy.current_price < min_cost:
-                    return False
-        return True
-
-    @beartype
-    def _validate_orders(
+    def _process_orders(
         self,
-        orders_by_base_quote_symbol: dict[BaseQuote, list[OrderBuilder]],
-        list_name: str = "orders",
-    ) -> dict[BaseQuote, list[OrderBuilder]]:
+        orders_by_base_quote: dict[BaseQuote, list[OrderBuilder]],
+        list_name: str,
+    ) -> dict[BaseQuote, list[OrderRequest]]:
         """
-        Assumptions:
-            - Funding rate orders comes in pairs, so we can group them by base/quote symbol
-            - If one leg of the pair is invalid, both legs are removed
-            - There can't be more than one order per base/quote symbol
+        Validates builders and converts them to requests.
+        If any order in a group (list) fails validation, the entire group is dropped.
         """
-        base_quote_symbols_to_remove: dict[BaseQuote, list[str]] = defaultdict(list)
+        valid_requests: dict[BaseQuote, list[OrderRequest]] = defaultdict(list)
 
-        for base_quote_symbol, orders in orders_by_base_quote_symbol.items():
-            for order in orders:
-                err_reason = order.validate()
-                if err_reason:
-                    base_quote_symbols_to_remove[base_quote_symbol].append(err_reason)
+        for base_quote, builders in orders_by_base_quote.items():
+            requests: list[OrderRequest] = []
+            group_valid = True
+            failure_reasons: list[str] = []
 
-        valid_orders: dict[BaseQuote, list[OrderBuilder]] = defaultdict(list)
-        for base_quote_symbol, orders in orders_by_base_quote_symbol.items():
-            if base_quote_symbol in base_quote_symbols_to_remove:
-                reasons = set(base_quote_symbols_to_remove[base_quote_symbol])
-                reasons_str = ": " + ", ".join(reasons) if reasons else ""
-                for order in orders:
-                    symbol = Symbol.from_market(order.market)
-                    logger.warning(f"{symbol} - removing from {list_name} orders{reasons_str}")
+            for builder in builders:
+                try:
+                    request = builder.build()
+                    requests.append(request)
+                except OrderValidationError as e:
+                    group_valid = False
+                    failure_reasons.append(str(e))
+                except Exception as e:
+                    group_valid = False
+                    failure_reasons.append(f"Unexpected error: {e}")
+
+            if group_valid:
+                valid_requests[base_quote] = requests
             else:
-                valid_orders[base_quote_symbol] = orders
+                symbol_str = f"{base_quote.base}/{base_quote.quote}"
+                reasons_str = "; ".join(failure_reasons)
+                logger.warning(
+                    f"{symbol_str} - removing from {list_name} orders due to validation errors: {reasons_str}"
+                )
 
-        return valid_orders
+        return dict(valid_requests)
 
     @beartype
-    def validate_orders(self) -> None:
-        # First, validate orders individually using the existing method
-        self.updates = self._validate_orders(self.updates, "updates")
-        self.new = self._validate_orders(self.new, "new")
-
-        # Remove duplicates between updates and new (prioritizing updates)
-        duplicate_keys: set[str] = set()
-        update_order_keys: set[str] = set()
-
+    def _deduplicate_new_orders(self) -> None:
+        """
+        Removes orders from 'new' that are duplicates of 'updates' or internal duplicates.
+        """
         # Create a set of unique identifiers for orders in updates
-        for _base_quote_symbol, orders in self.updates.items():
-            for order in orders:
-                # Create a unique key based on attributes that define unique orders
-                key = f"{order.exchange_id}:{order.market}:{order.side}:{order.size()}"
-                update_order_keys.add(key)
+        update_keys: set[str] = set()
+        for requests in self.updates.values():
+            for req in requests:
+                # Key based on exchange, symbol, side, amount
+                key = f"{req.exchange_id}:{req.symbol}:{req.side}:{req.amount}"
+                update_keys.add(key)
 
-        # Remove any new orders that are duplicates of update orders
-        cleaned_new: defaultdict[BaseQuote, list[OrderBuilder]] = defaultdict(list)
-        for base_quote_symbol, orders in self.new.items():
-            for order in orders:
-                key = f"{order.exchange_id}:{order.market}:{order.side}:{order.size()}"
-                if key in update_order_keys:
-                    symbol = Symbol.from_market(order.market)
+        cleaned_new: dict[BaseQuote, list[OrderRequest]] = defaultdict(list)
+
+        for base_quote, requests in self.new.items():
+            seen_in_group: set[str] = set()
+            filtered_requests: list[OrderRequest] = []
+
+            for req in requests:
+                key = f"{req.exchange_id}:{req.symbol}:{req.side}:{req.amount}"
+
+                if key in update_keys:
                     logger.warning(
-                        f"{symbol} - removing duplicate order from 'new' (already exists in 'updates')"
+                        f"{req.symbol} - removing duplicate order from 'new' (already exists in 'updates')"
                     )
-                    duplicate_keys.add(key)
-                else:
-                    cleaned_new[base_quote_symbol].append(order)
+                    continue
 
-        # Check for duplicates within the new orders
-        seen_in_new: set[str] = set()
-        for base_quote_symbol, orders in list(cleaned_new.items()):
-            filtered_orders: list[OrderBuilder] = []
-            for order in orders:
-                key = f"{order.exchange_id}:{order.market}:{order.side}:{order.size()}"
-                if key not in seen_in_new:
-                    seen_in_new.add(key)
-                    filtered_orders.append(order)
-                else:
-                    symbol = Symbol.from_market(order.market)
-                    logger.warning(f"{symbol} - removing duplicate order within 'new'")
+                if key in seen_in_group:
+                    logger.warning(f"{req.symbol} - removing duplicate order within 'new'")
+                    continue
 
-            if filtered_orders:
-                cleaned_new[base_quote_symbol] = filtered_orders
-            else:
-                del cleaned_new[base_quote_symbol]
+                seen_in_group.add(key)
+                filtered_requests.append(req)
+
+            if filtered_requests:
+                cleaned_new[base_quote] = filtered_requests
 
         self.new = dict(cleaned_new)
 
@@ -508,17 +608,29 @@ class OrdersToExecute:
         if self.updates or self.new:
             logger.info(context)
             await notifier.notify(context)
+
+        # Helper to convert OrderRequest to dict for DataFrame
+        def req_to_dict(req: OrderRequest) -> dict[str, Any]:
+            return {
+                "symbol": f"{req.symbol}@{req.exchange_id}",
+                "side": req.side.value,
+                "amount": f"{req.amount:.4f}",
+                "type": req.execution_type.value,
+                "notes": req.notes,
+            }
+
         if self.updates:
             updates_df = pl.DataFrame(
-                [order.to_df_dict() for orders in self.updates.values() for order in orders]
+                [req_to_dict(req) for reqs in self.updates.values() for req in reqs]
             ).sort("symbol")
             logger.info("update orders:", df=updates_df)
-            await notifier.notify("new orders:")
+            await notifier.notify("update orders:")
             await notifier.notify(updates_df)
+
         if self.new:
-            new_df = pl.DataFrame(
-                [order.to_df_dict() for orders in self.new.values() for order in orders]
-            ).sort("symbol")
+            new_df = pl.DataFrame([req_to_dict(req) for reqs in self.new.values() for req in reqs]).sort(
+                "symbol"
+            )
             logger.info("new orders:", df=new_df)
             await notifier.notify("new orders:")
             await notifier.notify(new_df)

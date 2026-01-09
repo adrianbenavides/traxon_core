@@ -7,9 +7,7 @@ from typing import Protocol, runtime_checkable
 from beartype import beartype
 
 from traxon_core.crypto.exchanges.exchange import Exchange
-from traxon_core.crypto.models import (
-    OrderSide,
-)
+from traxon_core.crypto.models.order import OrderRequest, OrderSide, OrderType, OrderValidationError
 from traxon_core.logs.structlog import logger
 from traxon_core.order_executor.config import ExecutorConfig, OrderExecutionStrategy
 from traxon_core.order_executor.exceptions import (
@@ -17,15 +15,12 @@ from traxon_core.order_executor.exceptions import (
     OrderFetchError,
     OrderTimeoutError,
     OrderUpdateError,
-    OrderValidationError,
 )
 from traxon_core.order_executor.models import (
     ElapsedSeconds,
     ExecutionReport,
     OrderBookDepthIndex,
     OrderBookState,
-    OrderRequest,
-    OrderType,
     SpreadPercent,
 )
 

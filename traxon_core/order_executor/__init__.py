@@ -21,7 +21,6 @@ from traxon_core.order_executor.exceptions import (
     OrderSizeCalculationError,
     OrderTimeoutError,
     OrderUpdateError,
-    OrderValidationError,
     SpreadTooWideError,
     WebSocketNotSupportedError,
 )
@@ -33,9 +32,7 @@ from traxon_core.order_executor.models import (
     OrderBookLevel,
     OrderBookState,
     OrderId,
-    OrderRequest,
     OrderStatus,
-    OrderType,
     Price,
     SpreadPercent,
 )
@@ -54,9 +51,7 @@ __all__ = [
     "OrderBookState",
     "OrderBookData",
     "OrderBookLevel",
-    "OrderRequest",
     "ExecutionReport",
-    "OrderType",
     "OrderStatus",
     # Types
     "OrderId",
@@ -66,7 +61,6 @@ __all__ = [
     "OrderBookDepthIndex",
     # Exceptions
     "OrderExecutorError",
-    "OrderValidationError",
     "OrderBookError",
     "SpreadTooWideError",
     "OrderCreationError",

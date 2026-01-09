@@ -35,6 +35,7 @@ class Exchange:
     ) -> None:
         self.api = exchange
         self.api_patch = api_patch
+        self.api_connection = config.api_connection
         self.leverage = config.leverage
         self.spot_enabled = config.spot
         self.perp_enabled = config.perp
