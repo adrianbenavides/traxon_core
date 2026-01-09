@@ -135,6 +135,7 @@ async def test_fetch_positions(exchange, mock_ccxt_exchange):
     assert pos.size == Decimal("1000.0")
     assert pos.notional_size == Decimal("1.0")
 
+
 @pytest.mark.asyncio
 async def test_exchange_close(exchange, mock_ccxt_exchange):
     await Exchange.close([exchange])
@@ -315,6 +316,35 @@ async def test_fetch_positions_filtered(exchange, mock_ccxt_exchange):
     positions = await exchange.fetch_positions(symbols=[Symbol("ETH/USDT:USDT")])
     assert len(positions) == 1
     assert positions[0].symbol == Symbol("ETH/USDT:USDT")
+
+
+@pytest.mark.asyncio
+async def test_fetch_portfolio(exchange, mock_ccxt_exchange):
+    # Mock balances
+    mock_ccxt_exchange.fetch_balance.return_value = {"total": {"BTC": 1.0}}
+    mock_ccxt_exchange.fetch_tickers.return_value = {"BTC/USDT": {"last": 50000.0}}
+
+    # Mock positions
+    ccxt_pos = {
+        "symbol": "BTC/USDT:USDT",
+        "contracts": 1000.0,
+        "side": "long",
+        "datetime": "2024-01-01T00:00:00Z",
+    }
+    mock_ccxt_exchange.fetch_positions.return_value = [ccxt_pos]
+    mock_ccxt_exchange.fetch_ticker.return_value = {"last": 50000.0}
+    exchange.api_patch.fetch_last_order_timestamp = AsyncMock(return_value=None)
+
+    from traxon_core.crypto.domain.models.portfolio import Portfolio
+
+    portfolio = await exchange.fetch_portfolio()
+
+    assert isinstance(portfolio, Portfolio)
+    assert portfolio.exchange_id == ExchangeId.BINANCE
+    assert len(portfolio.balances) == 1
+    assert len(portfolio.perps) == 1
+    assert portfolio.balances[0].symbol == Symbol("BTC/USDT")
+    assert portfolio.perps[0].symbol == Symbol("BTC/USDT:USDT")
 
 
 @pytest.mark.asyncio

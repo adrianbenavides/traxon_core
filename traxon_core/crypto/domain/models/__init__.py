@@ -1,6 +1,7 @@
 from traxon_core.crypto.domain.models.account import AccountEquity
 from traxon_core.crypto.domain.models.balance import Balance
 from traxon_core.crypto.domain.models.exchange_id import ExchangeId
+from traxon_core.crypto.domain.models.market import Market
 from traxon_core.crypto.domain.models.order import (
     DynamicSizeOrderBuilder,
     OrderBuilder,
@@ -11,6 +12,7 @@ from traxon_core.crypto.domain.models.order import (
     OrderSizingStrategyInverseVolatility,
     SizedOrderBuilder,
 )
+from traxon_core.crypto.domain.models.portfolio import Portfolio
 from traxon_core.crypto.domain.models.position import (
     Position,
     PositionSide,
@@ -22,6 +24,7 @@ __all__ = [
     "AccountEquity",
     "Balance",
     "ExchangeId",
+    "Market",
     "OrderSide",
     "OrderBuilder",
     "SizedOrderBuilder",
@@ -30,6 +33,7 @@ __all__ = [
     "OrderSizingStrategyFixed",
     "OrderSizingStrategyInverseVolatility",
     "OrderExecutionType",
+    "Portfolio",
     "PositionSide",
     "Position",
     "Symbol",

@@ -7,7 +7,7 @@ from ccxt.base.types import Market  # type: ignore[import-untyped]
 from ccxt.base.types import Position as CcxtPosition
 from ccxt.pro import Exchange as CcxtExchange
 
-from traxon_core.crypto.domain.models import Balance, Position, Symbol
+from traxon_core.crypto.domain.models import Balance, Portfolio, Position, Symbol
 from traxon_core.crypto.domain.models.account import AccountEquity
 from traxon_core.crypto.domain.models.exchange_id import ExchangeId
 from traxon_core.crypto.exchanges.api_patch import BaseExchangeApiPatch, ExchangeApiPatch
@@ -208,6 +208,28 @@ class Exchange:
             )
 
         return positions
+
+    async def fetch_portfolio(self, symbols: list[Symbol] | None = None) -> Portfolio:
+        """
+        Fetches both spot balances and perp positions for the exchange.
+        """
+        balances_list: list[Balance] = []
+        positions_list: list[Position] = []
+
+        if self.spot_enabled and self.perp_enabled:
+            balances_list, positions_list = await asyncio.gather(
+                self.fetch_balances(symbols=symbols), self.fetch_positions(symbols=symbols)
+            )
+        elif self.spot_enabled:
+            balances_list = await self.fetch_balances(symbols=symbols)
+        elif self.perp_enabled:
+            positions_list = await self.fetch_positions(symbols=symbols)
+
+        return Portfolio(
+            exchange_id=self.id,
+            balances=balances_list,
+            perps=positions_list,
+        )
 
 
 class ExchangeFactory:
