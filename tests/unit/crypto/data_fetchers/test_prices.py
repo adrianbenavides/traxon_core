@@ -2,8 +2,8 @@ from decimal import Decimal
 
 import pytest
 
-from traxon_core.crypto.domain.models import ExchangeId, Symbol
-from traxon_core.crypto.domain.models.price import Prices
+from traxon_core.crypto.models import ExchangeId, Symbol
+from traxon_core.crypto.models.price import Prices
 
 
 def test_prices_lookup():

@@ -1,8 +1,8 @@
-from traxon_core.crypto.domain.models.account import AccountEquity
-from traxon_core.crypto.domain.models.balance import Balance
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.market import Market
-from traxon_core.crypto.domain.models.order import (
+from traxon_core.crypto.models.account import AccountEquity
+from traxon_core.crypto.models.balance import Balance
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.market import Market
+from traxon_core.crypto.models.order import (
     DynamicSizeOrderBuilder,
     OrderBuilder,
     OrderExecutionType,
@@ -12,13 +12,13 @@ from traxon_core.crypto.domain.models.order import (
     OrderSizingStrategyInverseVolatility,
     SizedOrderBuilder,
 )
-from traxon_core.crypto.domain.models.portfolio import Portfolio
-from traxon_core.crypto.domain.models.position import (
+from traxon_core.crypto.models.portfolio import Portfolio
+from traxon_core.crypto.models.position import (
     Position,
     PositionSide,
 )
-from traxon_core.crypto.domain.models.symbol import Symbol
-from traxon_core.crypto.domain.models.timeframe import Timeframe
+from traxon_core.crypto.models.symbol import Symbol
+from traxon_core.crypto.models.timeframe import Timeframe
 
 __all__ = [
     "AccountEquity",

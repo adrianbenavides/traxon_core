@@ -4,14 +4,14 @@ from typing import cast
 
 from beartype import beartype
 
-from traxon_core.crypto.domain.models import (
+from traxon_core.crypto.exchanges.exchange import Exchange
+from traxon_core.crypto.models import (
     DynamicSizeOrderBuilder,
     ExchangeId,
     OrderBuilder,
     OrderExecutionType,
 )
-from traxon_core.crypto.domain.models.order import OrdersToExecute
-from traxon_core.crypto.exchanges.exchange import Exchange
+from traxon_core.crypto.models.order import OrdersToExecute
 from traxon_core.logs.notifiers import notifier
 from traxon_core.logs.structlog import logger
 from traxon_core.order_executor.base import OrderExecutor, OrderExecutorBase

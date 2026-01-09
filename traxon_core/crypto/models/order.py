@@ -13,8 +13,8 @@ from beartype import beartype
 from ccxt.base.types import Market  # type: ignore[import-untyped]
 from ccxt.base.types import OrderSide as OrderSideCcxt
 
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.symbol import BaseQuote, Symbol
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.symbol import BaseQuote, Symbol
 from traxon_core.logs.notifiers import notifier
 from traxon_core.logs.structlog import logger
 

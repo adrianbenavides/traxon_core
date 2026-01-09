@@ -2,11 +2,11 @@ from decimal import Decimal
 
 import pytest
 
-from traxon_core.crypto.domain.models.balance import Balance
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.portfolio import Portfolio
-from traxon_core.crypto.domain.models.position import Position
-from traxon_core.crypto.domain.models.symbol import Symbol
+from traxon_core.crypto.models.balance import Balance
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.portfolio import Portfolio
+from traxon_core.crypto.models.position import Position
+from traxon_core.crypto.models.symbol import Symbol
 
 
 def test_portfolio_initialization():

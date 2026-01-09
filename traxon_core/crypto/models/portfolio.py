@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 from beartype import beartype
 
-from traxon_core.crypto.domain.models.balance import Balance
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.position import Position
+from traxon_core.crypto.models.balance import Balance
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.position import Position
 
 
 @beartype

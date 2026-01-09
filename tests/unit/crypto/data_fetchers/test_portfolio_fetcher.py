@@ -4,8 +4,8 @@ import pytest
 
 from traxon_core.crypto.data_fetchers.portfolio import PortfolioFetcher
 from traxon_core.crypto.data_fetchers.prices import PriceFetcher
-from traxon_core.crypto.domain.models import ExchangeId, Portfolio
 from traxon_core.crypto.exchanges.exchange import Exchange
+from traxon_core.crypto.models import ExchangeId, Portfolio
 
 
 @pytest.mark.asyncio

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from traxon_core.crypto.data_fetchers.market import MarketFetcher
-from traxon_core.crypto.domain.models import ExchangeId, Market, Symbol
 from traxon_core.crypto.exchanges.exchange import Exchange
+from traxon_core.crypto.models import ExchangeId, Market, Symbol
 
 
 @pytest.fixture

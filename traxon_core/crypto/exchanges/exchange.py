@@ -6,9 +6,6 @@ from ccxt.base.types import Market  # type: ignore[import-untyped]
 from ccxt.base.types import Position as CcxtPosition
 from ccxt.pro import Exchange as CcxtExchange
 
-from traxon_core.crypto.domain.models import Balance, Portfolio, Position, Symbol
-from traxon_core.crypto.domain.models.account import AccountEquity
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
 from traxon_core.crypto.exchanges.api_patch import BaseExchangeApiPatch, ExchangeApiPatch
 from traxon_core.crypto.exchanges.api_patch.bybit import BybitExchangeApiPatches
 from traxon_core.crypto.exchanges.api_patch.hyperliquid import HyperliquidExchangeApiPatches
@@ -16,6 +13,9 @@ from traxon_core.crypto.exchanges.api_patch.kucoin import KucoinExchangeApiPatch
 from traxon_core.crypto.exchanges.api_patch.paradex import ParadexExchangeApiPatches
 from traxon_core.crypto.exchanges.api_patch.woofipro import WoofiProExchangeApiPatches
 from traxon_core.crypto.exchanges.config import ExchangeConfig
+from traxon_core.crypto.models import Balance, Portfolio, Position, Symbol
+from traxon_core.crypto.models.account import AccountEquity
+from traxon_core.crypto.models.exchange_id import ExchangeId
 from traxon_core.logs.notifiers import notifier
 from traxon_core.logs.structlog import logger
 

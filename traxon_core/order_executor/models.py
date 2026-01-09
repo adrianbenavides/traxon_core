@@ -13,7 +13,7 @@ from typing import Dict, NewType
 from beartype import beartype
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from traxon_core.crypto.domain.models import OrderSide
+from traxon_core.crypto.models import OrderSide
 
 OrderId = NewType("OrderId", str)
 """Unique identifier for an order on an exchange."""

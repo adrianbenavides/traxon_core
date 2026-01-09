@@ -7,8 +7,8 @@ from beartype import beartype
 from ccxt.async_support import Exchange as CcxtExchange  # type: ignore[import-untyped]
 from ccxt.base.types import Market, OpenInterest  # type: ignore[import-untyped]
 
-from traxon_core.crypto.domain.models import AccountEquity, ExchangeId, Symbol
 from traxon_core.crypto.exchanges.config import ExchangeConfig
+from traxon_core.crypto.models import AccountEquity, ExchangeId, Symbol
 from traxon_core.logs.structlog import logger
 
 

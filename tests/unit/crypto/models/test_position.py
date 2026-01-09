@@ -3,9 +3,9 @@ from decimal import Decimal
 
 import pytest
 
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.position import Position, PositionSide
-from traxon_core.crypto.domain.models.symbol import Symbol
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.position import Position, PositionSide
+from traxon_core.crypto.models.symbol import Symbol
 
 
 def test_position_initialization_parsing():

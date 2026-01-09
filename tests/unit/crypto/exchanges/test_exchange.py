@@ -7,11 +7,6 @@ from ccxt.async_support import Exchange as CcxtExchange  # type: ignore[import-u
 from ccxt.base.types import Market as CcxtMarket  # type: ignore[import-untyped]
 from ccxt.base.types import OpenInterest
 
-from traxon_core.crypto.domain.models.account import AccountEquity
-from traxon_core.crypto.domain.models.balance import Balance
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.position import Position, PositionSide
-from traxon_core.crypto.domain.models.symbol import Symbol
 from traxon_core.crypto.exchanges.api_patch import BaseExchangeApiPatch
 from traxon_core.crypto.exchanges.api_patch.bybit import BybitExchangeApiPatches
 from traxon_core.crypto.exchanges.api_patch.hyperliquid import HyperliquidExchangeApiPatches
@@ -20,6 +15,11 @@ from traxon_core.crypto.exchanges.api_patch.paradex import ParadexExchangeApiPat
 from traxon_core.crypto.exchanges.api_patch.woofipro import WoofiProExchangeApiPatches
 from traxon_core.crypto.exchanges.config import ExchangeConfig
 from traxon_core.crypto.exchanges.exchange import Exchange, ExchangeFactory
+from traxon_core.crypto.models.account import AccountEquity
+from traxon_core.crypto.models.balance import Balance
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.position import Position, PositionSide
+from traxon_core.crypto.models.symbol import Symbol
 
 
 @pytest.fixture
@@ -335,7 +335,7 @@ async def test_fetch_portfolio(exchange, mock_ccxt_exchange):
     mock_ccxt_exchange.fetch_ticker.return_value = {"last": 50000.0}
     exchange.api_patch.fetch_last_order_timestamp = AsyncMock(return_value=None)
 
-    from traxon_core.crypto.domain.models.portfolio import Portfolio
+    from traxon_core.crypto.models.portfolio import Portfolio
 
     portfolio = await exchange.fetch_portfolio()
 

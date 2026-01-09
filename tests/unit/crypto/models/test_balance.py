@@ -5,9 +5,9 @@ from unittest.mock import MagicMock
 import pytest
 from ccxt.base.types import Market as CcxtMarket  # type: ignore[import-untyped]
 
-from traxon_core.crypto.domain.models.balance import Balance
-from traxon_core.crypto.domain.models.exchange_id import ExchangeId
-from traxon_core.crypto.domain.models.symbol import Symbol
+from traxon_core.crypto.models.balance import Balance
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.symbol import Symbol
 
 
 @pytest.fixture

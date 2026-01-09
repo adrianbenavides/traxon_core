@@ -5,13 +5,13 @@ from beartype import beartype
 
 from traxon_core.crypto.data_fetchers.base import BaseFetcher
 from traxon_core.crypto.data_fetchers.prices import PriceFetcher
-from traxon_core.crypto.domain.models import (
+from traxon_core.crypto.exchanges.exchange import Exchange
+from traxon_core.crypto.models import (
     ExchangeId,
     Portfolio,
     Position,
     Symbol,
 )
-from traxon_core.crypto.exchanges.exchange import Exchange
 from traxon_core.logs.notifiers import notifier
 
 

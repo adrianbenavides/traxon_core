@@ -1,6 +1,6 @@
 import pytest
 
-from traxon_core.crypto.domain.models.symbol import BaseQuote, Symbol
+from traxon_core.crypto.models.symbol import BaseQuote, Symbol
 
 
 def test_base_quote_equality():

@@ -6,10 +6,10 @@ from typing import Protocol, runtime_checkable
 
 from beartype import beartype
 
-from traxon_core.crypto.domain.models import (
+from traxon_core.crypto.exchanges.exchange import Exchange
+from traxon_core.crypto.models import (
     OrderSide,
 )
-from traxon_core.crypto.exchanges.exchange import Exchange
 from traxon_core.logs.structlog import logger
 from traxon_core.order_executor.config import ExecutorConfig, OrderExecutionStrategy
 from traxon_core.order_executor.exceptions import (

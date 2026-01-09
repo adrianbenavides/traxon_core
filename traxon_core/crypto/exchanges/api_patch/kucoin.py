@@ -5,9 +5,9 @@ from beartype import beartype
 from ccxt.async_support import Exchange as CcxtExchange  # type: ignore[import-untyped]
 from ccxt.base.types import OpenInterest  # type: ignore[import-untyped]
 
-from traxon_core.crypto.domain.models import AccountEquity, Symbol
 from traxon_core.crypto.exchanges.api_patch import BaseExchangeApiPatch
 from traxon_core.crypto.exchanges.config import ExchangeConfig
+from traxon_core.crypto.models import AccountEquity, Symbol
 
 
 class KucoinExchangeApiPatches(BaseExchangeApiPatch):

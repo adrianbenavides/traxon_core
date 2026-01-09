@@ -5,7 +5,7 @@ from typing import Dict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from traxon_core.crypto.domain.models import ExchangeId, Symbol
+from traxon_core.crypto.models import ExchangeId, Symbol
 
 
 class Prices(BaseModel):
