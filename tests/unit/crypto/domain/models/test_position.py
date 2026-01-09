@@ -5,6 +5,7 @@ import pytest
 
 from traxon_core.crypto.domain.models.exchange_id import ExchangeId
 from traxon_core.crypto.domain.models.position import Position, PositionSide, PositionType
+from traxon_core.crypto.domain.models.symbol import Symbol
 
 
 def test_position_type_enum():
@@ -14,9 +15,11 @@ def test_position_type_enum():
 
 def test_unified_position_initialization():
     market = {"symbol": "BTC/USDT", "id": "BTCUSDT"}
+    symbol = Symbol("BTC/USDT")
     pos = Position(
         market=market,
         exchange_id=ExchangeId.BINANCE,
+        symbol=symbol,
         type=PositionType.SPOT,
         side=PositionSide.LONG,
         size=Decimal("1.0"),
@@ -30,13 +33,16 @@ def test_unified_position_initialization():
     assert pos.current_price == Decimal("50000.0")
     assert pos.notional_size() == Decimal("1.0")
     assert pos.value() == Decimal("50000.0")
+    assert pos.symbol == symbol
 
 
 def test_perp_position_calculations():
     market = {"symbol": "BTC/USDT:USDT", "id": "BTCUSDT"}
+    symbol = Symbol("BTC/USDT:USDT")
     pos = Position(
         market=market,
         exchange_id=ExchangeId.BINANCE,
+        symbol=symbol,
         type=PositionType.PERP,
         side=PositionSide.SHORT,
         size=Decimal("10"),
@@ -49,9 +55,11 @@ def test_perp_position_calculations():
 
 def test_position_to_df_dict():
     market = {"symbol": "BTC/USDT", "id": "BTCUSDT"}
+    symbol = Symbol("BTC/USDT")
     pos = Position(
         market=market,
         exchange_id=ExchangeId.BINANCE,
+        symbol=symbol,
         type=PositionType.SPOT,
         side=PositionSide.LONG,
         size=Decimal("1.0"),
@@ -71,17 +79,24 @@ def test_position_to_df_dict():
 
 def test_position_from_spot():
     market = {"symbol": "BTC/USDT", "id": "BTCUSDT"}
+    symbol = Symbol("BTC/USDT")
     pos = Position.from_spot(
-        market=market, exchange_id=ExchangeId.BINANCE, size=Decimal("1.5"), current_price=Decimal("50000.0")
+        market=market,
+        exchange_id=ExchangeId.BINANCE,
+        symbol=symbol,
+        size=Decimal("1.5"),
+        current_price=Decimal("50000.0"),
     )
     assert pos.type == PositionType.SPOT
     assert pos.size == Decimal("1.5")
     assert pos.contract_size == Decimal("1.0")
     assert pos.side == PositionSide.LONG
+    assert pos.symbol == symbol
 
 
 def test_position_from_perp():
     market = {"symbol": "BTC/USDT:USDT", "id": "BTCUSDT", "contractSize": 0.1}
+    symbol = Symbol("BTC/USDT:USDT")
     ccxt_pos = {
         "contracts": 10.0,
         "side": "long",
@@ -91,6 +106,7 @@ def test_position_from_perp():
     pos = Position.from_perp(
         market=market,
         exchange_id=ExchangeId.BINANCE,
+        symbol=symbol,
         current_price=Decimal("50000.0"),
         ccxt_position=ccxt_pos,
     )
@@ -99,3 +115,4 @@ def test_position_from_perp():
     assert pos.contract_size == Decimal("0.1")
     assert pos.side == PositionSide.LONG
     assert pos.created_at is not None
+    assert pos.symbol == symbol

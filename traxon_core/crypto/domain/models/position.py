@@ -12,6 +12,7 @@ from traxon_core.dates import to_datetime
 
 from .exchange_id import ExchangeId
 from .order import OrderSide
+from .symbol import Symbol
 
 
 class PositionType(str, Enum):
@@ -45,6 +46,7 @@ class Position:
 
     market: CcxtMarket
     exchange_id: ExchangeId
+    symbol: Symbol
     type: PositionType
     side: PositionSide
     size: Decimal
@@ -59,6 +61,7 @@ class Position:
         cls,
         market: CcxtMarket,
         exchange_id: ExchangeId,
+        symbol: Symbol,
         size: Decimal,
         current_price: Decimal,
     ) -> "Position":
@@ -66,6 +69,7 @@ class Position:
         return cls(
             market=market,
             exchange_id=exchange_id,
+            symbol=symbol,
             type=PositionType.SPOT,
             side=PositionSide.LONG,
             size=size,
@@ -79,6 +83,7 @@ class Position:
         cls,
         market: CcxtMarket,
         exchange_id: ExchangeId,
+        symbol: Symbol,
         current_price: Decimal,
         ccxt_position: CcxtPosition,
     ) -> "Position":
@@ -90,6 +95,7 @@ class Position:
         return cls(
             market=market,
             exchange_id=exchange_id,
+            symbol=symbol,
             type=PositionType.PERP,
             side=side,
             size=size,
