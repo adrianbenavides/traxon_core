@@ -3,17 +3,17 @@ from decimal import Decimal
 from typing import Any
 
 from beartype import beartype
-from ccxt.base.types import Market as CcxtMarket  # type: ignore[import-untyped]
 
-from .exchange_id import ExchangeId
-from .symbol import Symbol
+from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.market_info import MarketInfo
+from traxon_core.crypto.models.symbol import Symbol
 
 
 @dataclass(frozen=True, init=False)
 class Balance:
     """Represents a spot balance (holding) of an asset."""
 
-    market: CcxtMarket
+    market: MarketInfo
     exchange_id: ExchangeId
     symbol: Symbol
     size: Decimal
@@ -23,7 +23,7 @@ class Balance:
 
     def __init__(
         self,
-        market: CcxtMarket,
+        market: MarketInfo,
         exchange_id: ExchangeId,
         symbol: Symbol,
         size: Decimal,
@@ -43,7 +43,7 @@ class Balance:
     def to_df_dict(self) -> dict[str, Any]:
         """Convert to a dictionary suitable for DataFrame creation."""
         return {
-            "symbol": f"{self.market['symbol']}@{self.exchange_id.value}",
+            "symbol": f"{self.market.symbol.raw_symbol}@{self.exchange_id.value}",
             "size": self.size,
             "price": self.current_price,
             "value": self.value,

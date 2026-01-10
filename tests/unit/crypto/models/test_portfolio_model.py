@@ -4,14 +4,31 @@ import pytest
 
 from traxon_core.crypto.models.balance import Balance
 from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.market_info import MarketInfo
 from traxon_core.crypto.models.portfolio import Portfolio
-from traxon_core.crypto.models.position import Position
+from traxon_core.crypto.models.position.position import Position
 from traxon_core.crypto.models.symbol import Symbol
 
 
 def test_portfolio_initialization():
-    market_btc = {"symbol": "BTC/USDT", "base": "BTC", "quote": "USDT"}
-    market_eth = {"symbol": "ETH/USDT:USDT", "base": "ETH", "quote": "USDT", "contractSize": 1}
+    ccxt_market_btc = {
+        "symbol": "BTC/USDT",
+        "type": "spot",
+        "active": True,
+        "limits": {"amount": {"min": 0.001}},
+        "precision": {"amount": 8, "price": 2},
+    }
+    market_btc = MarketInfo.from_ccxt(ccxt_market_btc)
+
+    ccxt_market_eth = {
+        "symbol": "ETH/USDT:USDT",
+        "type": "swap",
+        "active": True,
+        "contractSize": 1,
+        "limits": {"amount": {"min": 0.01}},
+        "precision": {"amount": 3, "price": 2},
+    }
+    market_eth = MarketInfo.from_ccxt(ccxt_market_eth)
 
     balance = Balance(
         market=market_btc,

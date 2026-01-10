@@ -7,6 +7,7 @@ import pytest
 from traxon_core.crypto.data_fetchers.market import MarketFetcher
 from traxon_core.crypto.exchanges.exchange import Exchange
 from traxon_core.crypto.models import ExchangeId, Market, Symbol
+from traxon_core.crypto.models.market_info import MarketInfo
 
 
 @pytest.fixture
@@ -23,10 +24,12 @@ def mock_cache():
 def mock_exchange():
     exchange = MagicMock(spec=Exchange)
     exchange.id = ExchangeId.BYBIT
+    btc_info = MarketInfo.from_ccxt({"symbol": "BTC/USDT", "active": True, "type": "spot"})
+    eth_info = MarketInfo.from_ccxt({"symbol": "ETH/USDT", "active": True, "type": "spot"})
     exchange.load_markets = AsyncMock(
         return_value={
-            Symbol("BTC/USDT"): {"symbol": "BTC/USDT", "active": True},
-            Symbol("ETH/USDT"): {"symbol": "ETH/USDT", "active": True},
+            Symbol("BTC/USDT"): btc_info,
+            Symbol("ETH/USDT"): eth_info,
         }
     )
     exchange.api = MagicMock()
@@ -52,7 +55,7 @@ async def test_fetch_market_cache_miss(mock_cache, mock_exchange):
 @pytest.mark.asyncio
 async def test_fetch_market_cache_hit(mock_cache, mock_exchange):
     market_obj = Market(
-        inner={"symbol": "BTC/USDT", "active": True},
+        info=MarketInfo.from_ccxt({"symbol": "BTC/USDT", "active": True, "type": "spot"}),
         avg_volume=Decimal("1000"),
         close_prices=[Decimal("100"), Decimal("101")],
     )

@@ -63,7 +63,6 @@ test = "uv run pytest tests -v"
 [tool.mypy]
 plugins = ['pydantic.mypy']
 python_version = "3.12"
-exclude = 'legacy_codebase'
 strict = true
 warn_return_any = true
 warn_unused_configs = true
@@ -92,7 +91,7 @@ disallow_incomplete_defs = false
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-exclude = ["legacy_codebase", "__pycache__", ".git", ".venv", "venv"]
+exclude = ["__pycache__", ".git", ".venv"]
 
 [tool.ruff.format]
 quote-style = "double"

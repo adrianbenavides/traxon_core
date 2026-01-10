@@ -67,9 +67,7 @@ class PriceFetcher(BaseFetcher):
             tickers = {}
 
             self.logger.debug("fetching tickers for spot symbols", exchange_id=exchange.id)
-            all_spot_symbols = [
-                str(symbol) for symbol, market in markets.items() if market.get("spot", False)
-            ]
+            all_spot_symbols = [str(symbol) for symbol, market in markets.items() if market.type == "spot"]
             spot_symbols = set(symbols_str).intersection(all_spot_symbols)
             if spot_symbols:
                 spot_tickers = await exchange.api.fetch_tickers(list(spot_symbols))
@@ -79,9 +77,7 @@ class PriceFetcher(BaseFetcher):
                     tickers.update(spot_tickers)
 
             self.logger.debug("fetching tickers for perp symbols", exchange_id=exchange.id)
-            all_perp_symbols = [
-                str(symbol) for symbol, market in markets.items() if market.get("swap", False)
-            ]
+            all_perp_symbols = [str(symbol) for symbol, market in markets.items() if market.type == "swap"]
             perp_symbols = set(symbols_str).intersection(all_perp_symbols)
             if perp_symbols:
                 perp_tickers = await exchange.api.fetch_tickers(list(perp_symbols))

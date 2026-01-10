@@ -13,6 +13,7 @@ from traxon_core.crypto.models import (
     Market,
     Symbol,
 )
+from traxon_core.crypto.models.market_info import MarketInfo
 from traxon_core.persistence.cache import Cache
 
 
@@ -38,12 +39,12 @@ class MarketFetcher(BaseFetcher):
             # Process up to 5 markets concurrently
             semaphore = asyncio.Semaphore(5)
 
-            async def _process_market(idx: int, symbol: Symbol, market: dict[str, Any]) -> Market | None:
+            async def _process_market(idx: int, symbol: Symbol, market_info: MarketInfo) -> Market | None:
                 async with semaphore:
                     self.logger.info(f"{idx}/{len(markets)} {symbol}@{exchange_id} - loading recent data")
-                    self.logger.debug(f"{symbol}@{exchange_id} - market data: {market}")
+                    self.logger.debug(f"{symbol}@{exchange_id} - market data: {market_info}")
 
-                    if not market.get("active", False):
+                    if not market_info.active:
                         self.logger.debug(f"{symbol}@{exchange_id} - skipping inactive market")
                         return None
 
@@ -78,7 +79,9 @@ class MarketFetcher(BaseFetcher):
                         avg_volume = sum(volumes[-volume_average_days:]) / Decimal(volume_average_days)
 
                         # Create Market object with collected data
-                        market_obj = Market(inner=market, avg_volume=avg_volume, close_prices=close_prices)
+                        market_obj = Market(
+                            info=market_info, avg_volume=avg_volume, close_prices=close_prices
+                        )
                         await self.cache.save(cache_key, market_obj)
 
                         return market_obj

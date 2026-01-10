@@ -11,13 +11,12 @@ from traxon_core.crypto.models.order import (
     OrderSizingStrategyFixed,
     OrderSizingStrategyInverseVolatility,
     OrdersToExecute,
+    OrderType,
     SizedOrderBuilder,
 )
 from traxon_core.crypto.models.portfolio import Portfolio
-from traxon_core.crypto.models.position import (
-    Position,
-    PositionSide,
-)
+from traxon_core.crypto.models.position.position import Position
+from traxon_core.crypto.models.position.side import PositionSide
 from traxon_core.crypto.models.symbol import BaseQuote, Symbol
 from traxon_core.crypto.models.timeframe import Timeframe
 
@@ -28,6 +27,7 @@ __all__ = [
     "ExchangeId",
     "Market",
     "OrderSide",
+    "OrderType",
     "OrderBuilder",
     "OrdersToExecute",
     "SizedOrderBuilder",

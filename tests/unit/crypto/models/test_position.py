@@ -4,12 +4,15 @@ from decimal import Decimal
 import pytest
 
 from traxon_core.crypto.models.exchange_id import ExchangeId
-from traxon_core.crypto.models.position import Position, PositionSide
+from traxon_core.crypto.models.market_info import MarketInfo
+from traxon_core.crypto.models.position.position import Position
+from traxon_core.crypto.models.position.side import PositionSide
 from traxon_core.crypto.models.symbol import Symbol
 
 
 def test_position_initialization_parsing():
-    market = {"symbol": "BTC/USDT:USDT", "id": "BTCUSDT", "contractSize": 0.1}
+    ccxt_market = {"symbol": "BTC/USDT:USDT", "type": "swap", "active": True, "contractSize": 0.1}
+    market = MarketInfo.from_ccxt(ccxt_market)
     symbol = Symbol("BTC/USDT:USDT")
     ccxt_pos = {
         "contracts": 10.0,
@@ -39,7 +42,8 @@ def test_position_initialization_parsing():
 
 
 def test_position_to_df_dict():
-    market = {"symbol": "BTC/USDT:USDT", "id": "BTCUSDT", "contractSize": 0.1}
+    ccxt_market = {"symbol": "BTC/USDT:USDT", "type": "swap", "active": True, "contractSize": 0.1}
+    market = MarketInfo.from_ccxt(ccxt_market)
     symbol = Symbol("BTC/USDT:USDT")
     ccxt_pos = {
         "contracts": 10.0,

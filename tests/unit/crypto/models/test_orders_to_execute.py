@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.market_info import MarketInfo
 from traxon_core.crypto.models.order import (
     OrderBuilder,
     OrderExecutionType,
@@ -16,11 +17,15 @@ from traxon_core.crypto.models.symbol import BaseQuote
 
 @pytest.fixture
 def market_btc():
-    return {
+    ccxt_market = {
         "symbol": "BTC/USDT",
+        "type": "spot",
+        "active": True,
         "limits": {"amount": {"min": 0.001}, "cost": {"min": 5.0}},
         "contractSize": 1.0,
+        "precision": {"amount": 8, "price": 2},
     }
+    return MarketInfo.from_ccxt(ccxt_market)
 
 
 def test_orders_to_execute_builds_requests(market_btc):

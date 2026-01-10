@@ -13,6 +13,7 @@ from traxon_core.crypto.models import (
     OrdersToExecute,
     SizedOrderBuilder,
 )
+from traxon_core.crypto.models.market_info import MarketInfo
 from traxon_core.crypto.order_executor.base import OrderExecutor
 from traxon_core.crypto.order_executor.config import ExecutorConfig, OrderExecutionStrategy
 from traxon_core.crypto.order_executor.default_executor import DefaultOrderExecutor
@@ -37,11 +38,15 @@ def mock_exchange():
 
 @pytest.fixture
 def market_btc():
-    return {
+    ccxt_market = {
         "symbol": "BTC/USDT",
+        "type": "spot",
+        "active": True,
         "limits": {"amount": {"min": 0.001}, "cost": {"min": 5.0}},
         "contractSize": 1.0,
+        "precision": {"amount": 8, "price": 2},
     }
+    return MarketInfo.from_ccxt(ccxt_market)
 
 
 @pytest.mark.asyncio

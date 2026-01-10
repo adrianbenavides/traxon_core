@@ -2,7 +2,7 @@ import asyncio
 from decimal import Decimal
 
 import ccxt.pro as ccxt  # type: ignore[import-untyped]
-from ccxt.base.types import Market  # type: ignore[import-untyped]
+from ccxt.base.types import Market as CcxtMarket  # type: ignore[import-untyped]
 from ccxt.base.types import Position as CcxtPosition
 from ccxt.pro import Exchange as CcxtExchange
 
@@ -16,6 +16,7 @@ from traxon_core.crypto.exchanges.config import ExchangeConfig
 from traxon_core.crypto.models import Balance, Portfolio, Position, Symbol
 from traxon_core.crypto.models.account import AccountEquity
 from traxon_core.crypto.models.exchange_id import ExchangeId
+from traxon_core.crypto.models.market_info import MarketInfo
 from traxon_core.logs.notifiers import notifier
 from traxon_core.logs.structlog import logger
 
@@ -59,10 +60,10 @@ class Exchange:
             except Exception as e:
                 logger.error(f"{exchange.id} - error closing exchange: {e}", exc_info=True)
 
-    async def load_markets(self) -> dict[Symbol, Market]:
+    async def load_markets(self) -> dict[Symbol, MarketInfo]:
         max_retries = 3
         retry_delay = 5
-        markets: dict[str, Market] = dict()
+        markets: dict[str, CcxtMarket] = dict()
         for attempt in range(max_retries):
             try:
                 markets = await self.api.load_markets()
@@ -79,7 +80,7 @@ class Exchange:
                     raise
 
         filtered_markets = self.api_patch.filter_markets(markets)
-        return filtered_markets
+        return {Symbol(s): MarketInfo.from_ccxt(m) for s, m in filtered_markets.items()}
 
     def has_ws_support(self) -> bool:
         """Check if the exchange supports WebSocket order execution."""
@@ -113,14 +114,14 @@ class Exchange:
         """
         balances: list[Balance] = []
 
-        markets = await self.api.load_markets()
+        markets = await self.load_markets()
         res = await self.api.fetch_balance(
             {
                 "type": "spot",
             }
         )
         all_balances = self.api_patch.filter_spot_balances(res)
-        symbols_str = [str(s) for s in all_balances.keys() if str(s) in markets]
+        symbols_str = [str(s) for s in all_balances.keys() if Symbol(s) in markets]
 
         if not symbols_str:
             self.logger.info(f"{self.api.id} - no spot balances found")
@@ -135,7 +136,7 @@ class Exchange:
                 continue
 
             symbol_str = str(symbol)
-            if symbol_str not in markets:
+            if Symbol(symbol_str) not in markets:
                 _log = f"{self.id} - symbol {symbol} not found in markets"
                 self.logger.warning(_log)
                 await notifier.notify(_log)
@@ -143,9 +144,9 @@ class Exchange:
             if symbol_str not in tickers:
                 continue
 
-            market = markets[symbol_str]
-            min_amount = market["limits"]["amount"]["min"]
-            min_cost = market["limits"]["cost"]["min"]
+            market_info = markets[Symbol(symbol_str)]
+            min_amount = market_info.min_amount
+            min_cost = market_info.min_cost
             ticker = tickers[symbol_str]
             last_price = Decimal(str(ticker["last"]))
             value = amount * last_price
@@ -157,7 +158,7 @@ class Exchange:
 
             balances.append(
                 Balance(
-                    market=market,
+                    market=market_info,
                     exchange_id=self.id,
                     symbol=symbol,
                     size=amount,
@@ -178,11 +179,12 @@ class Exchange:
         """
         ccxt_positions: list[CcxtPosition] = await self.api.fetch_positions()
         positions: list[Position] = []
+        markets = await self.load_markets()
 
         # For each position, fetch the last filled order and convert to domain model
         for ccxt_position in ccxt_positions:
             symbol_str = ccxt_position["symbol"]
-            if symbol_str not in self.api.markets:
+            if Symbol(symbol_str) not in markets:
                 _log = f"{self.id} - symbol {symbol_str} not found in markets"
                 self.logger.warning(_log)
                 await notifier.notify(_log)
@@ -196,18 +198,19 @@ class Exchange:
             since = self.api.milliseconds() - 10 * 24 * 60 * 60 * 1000
             limit = 10
             last_trade_timestamp = await self.api_patch.fetch_last_order_timestamp(symbol, since, limit)
+
+            market_info = markets[symbol]
             if last_trade_timestamp:
                 ccxt_position["lastTradeTimestamp"] = last_trade_timestamp
                 ccxt_position["lastTradeDatetime"] = self.api.iso8601(last_trade_timestamp)
 
-            market = self.api.markets[symbol_str]
             ticker = await self.api.fetch_ticker(symbol_str)
             last = ticker.get("last", None)
             current_price = Decimal(str(last)) if last is not None else Decimal(0)
 
             positions.append(
                 Position(
-                    market=market,
+                    market=market_info,
                     exchange_id=self.id,
                     symbol=symbol,
                     current_price=current_price,

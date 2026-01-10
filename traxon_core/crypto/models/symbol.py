@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-
-from ccxt.base.types import Market  # type: ignore[import-untyped]
+from typing import Any
 
 equivalent_quotes = ["USDC", "USDT"]
 
@@ -63,7 +62,7 @@ class Symbol:
         return BaseQuote(self.base, self.quote)
 
     @staticmethod
-    def from_market(market: Market) -> "Symbol":
+    def from_market(market: dict[str, Any]) -> "Symbol":
         return Symbol(market["symbol"])
 
     def sanitize(self) -> str:

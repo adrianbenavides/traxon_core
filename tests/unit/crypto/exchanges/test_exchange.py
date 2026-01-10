@@ -18,7 +18,8 @@ from traxon_core.crypto.exchanges.exchange import Exchange, ExchangeFactory
 from traxon_core.crypto.models.account import AccountEquity
 from traxon_core.crypto.models.balance import Balance
 from traxon_core.crypto.models.exchange_id import ExchangeId
-from traxon_core.crypto.models.position import Position, PositionSide
+from traxon_core.crypto.models.position.position import Position
+from traxon_core.crypto.models.position.side import PositionSide
 from traxon_core.crypto.models.symbol import Symbol
 
 
@@ -163,7 +164,7 @@ async def test_fetch_available_equity_integrated(exchange, mock_ccxt_exchange):
 @pytest.mark.asyncio
 async def test_load_markets_retry(exchange, mock_ccxt_exchange):
     mock_ccxt_exchange.load_markets = AsyncMock(
-        side_effect=[Exception("Fail"), Exception("Fail"), {"BTC/USDT": {}}]
+        side_effect=[Exception("Fail"), Exception("Fail"), {"BTC/USDT": {"symbol": "BTC/USDT"}}]
     )
     with patch("asyncio.sleep", AsyncMock()):
         markets = await exchange.load_markets()
