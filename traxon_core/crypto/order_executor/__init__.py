@@ -10,9 +10,9 @@ All components follow Rust-like safety principles with immutable models,
 strict typing, and comprehensive error handling.
 """
 
-from traxon_core.order_executor.base import OrderExecutor, OrderExecutorBase
-from traxon_core.order_executor.default_executor import DefaultOrderExecutor
-from traxon_core.order_executor.exceptions import (
+from traxon_core.crypto.order_executor.base import OrderExecutor, OrderExecutorBase
+from traxon_core.crypto.order_executor.default_executor import DefaultOrderExecutor
+from traxon_core.crypto.order_executor.exceptions import (
     OrderBookError,
     OrderCancellationError,
     OrderCreationError,
@@ -24,7 +24,7 @@ from traxon_core.order_executor.exceptions import (
     SpreadTooWideError,
     WebSocketNotSupportedError,
 )
-from traxon_core.order_executor.models import (
+from traxon_core.crypto.order_executor.models import (
     ElapsedSeconds,
     ExecutionReport,
     OrderBookData,
@@ -36,8 +36,8 @@ from traxon_core.order_executor.models import (
     Price,
     SpreadPercent,
 )
-from traxon_core.order_executor.rest import RestApiOrderExecutor
-from traxon_core.order_executor.ws import WebSocketOrderExecutor
+from traxon_core.crypto.order_executor.rest import RestApiOrderExecutor
+from traxon_core.crypto.order_executor.ws import WebSocketOrderExecutor
 
 __all__ = [
     # Base classes

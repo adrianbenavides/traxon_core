@@ -7,13 +7,13 @@ from traxon_core.crypto.exchanges.config import ExchangeApiConnection
 from traxon_core.crypto.exchanges.exchange import Exchange
 from traxon_core.crypto.models import ExchangeId
 from traxon_core.crypto.models.order import OrderRequest, OrdersToExecute, OrderType
+from traxon_core.crypto.order_executor.base import OrderExecutor, OrderExecutorBase
+from traxon_core.crypto.order_executor.config import ExecutorConfig
+from traxon_core.crypto.order_executor.models import ExecutionReport, OrderStatus
+from traxon_core.crypto.order_executor.rest import RestApiOrderExecutor
+from traxon_core.crypto.order_executor.ws import WebSocketOrderExecutor
 from traxon_core.logs.notifiers import notifier
 from traxon_core.logs.structlog import logger
-from traxon_core.order_executor.base import OrderExecutor, OrderExecutorBase
-from traxon_core.order_executor.config import ExecutorConfig
-from traxon_core.order_executor.models import ExecutionReport, OrderStatus
-from traxon_core.order_executor.rest import RestApiOrderExecutor
-from traxon_core.order_executor.ws import WebSocketOrderExecutor
 
 
 class DefaultOrderExecutor:
