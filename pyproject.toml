@@ -45,6 +45,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["traxon_core"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"traxon_core/py.typed" = "traxon_core/py.typed"
+
 [tool.poe.tasks]
 format = [
   { cmd = "uv run ruff check --select I --fix" },
