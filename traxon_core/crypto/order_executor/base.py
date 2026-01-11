@@ -22,6 +22,7 @@ from traxon_core.crypto.order_executor.models import (
     OrderBookState,
     SpreadPercent,
 )
+from traxon_core.crypto.utils import log_prefix as log_prefix_util
 from traxon_core.logs.structlog import logger
 
 
@@ -90,11 +91,7 @@ class OrderExecutorBase(ABC):
     @staticmethod
     @beartype
     def log_prefix(exchange: Exchange, symbol: str, side: OrderSide | None = None) -> str:
-        exchange_id: str = exchange.id
-        prefix: str = f"{symbol}@{exchange_id}"
-        if side:
-            prefix += f"_{side.to_ccxt()}"
-        return prefix
+        return log_prefix_util(exchange, symbol, side)
 
     @beartype
     def validate_request(self, request: OrderRequest) -> None:

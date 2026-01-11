@@ -1,7 +1,6 @@
 import abc
 from typing import Any, Protocol, runtime_checkable
 
-import pandas as pd
 import polars as pl
 from beartype import beartype
 from typing_extensions import TypeGuard
@@ -67,7 +66,6 @@ class BasePushNotifier(abc.ABC, PushNotifier):
     @abc.abstractmethod
     @beartype
     async def send(self, message: object) -> None:
-        """Send a simple message without level or data."""
         pass
 
     @abc.abstractmethod
@@ -78,13 +76,12 @@ class BasePushNotifier(abc.ABC, PushNotifier):
         exception: Exception | None = None,
         context: dict[str, Any] | None = None,
     ) -> None:
-        """Send error notification with exception details if available."""
         pass
 
     @staticmethod
     @beartype
-    def _is_dataframe(message: object) -> TypeGuard[pd.DataFrame | pl.DataFrame]:
-        return isinstance(message, pd.DataFrame) or isinstance(message, pl.DataFrame)
+    def _is_dataframe(message: object) -> TypeGuard[pl.DataFrame]:
+        return isinstance(message, pl.DataFrame)
 
     @staticmethod
     @beartype
@@ -99,17 +96,8 @@ class BasePushNotifier(abc.ABC, PushNotifier):
             decimal_places: int = 4
 
             # Get column names and their string representations
-            cols: list[str]
-            rows: list[list[Any]]
-
-            if isinstance(message, pd.DataFrame):
-                df_pd: pd.DataFrame = message.copy()
-                cols = [str(col) for col in df_pd.columns]
-                rows = df_pd.values.tolist()
-            else:
-                df_pl: pl.DataFrame = message.clone()
-                cols = [str(col) for col in df_pl.columns]
-                rows = [list(row) for row in df_pl.rows()]
+            cols: list[str] = [str(col) for col in message.columns]
+            rows: list[list[Any]] = [list(row) for row in message.rows()]
 
             result: list[str] = []
 

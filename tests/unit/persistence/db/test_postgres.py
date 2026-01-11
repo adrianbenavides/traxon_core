@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from traxon_core.persistence.db import PostgresDatabase, PostgresConfig
+from traxon_core.persistence.db import PostgresConfig, PostgresDatabase
 
 
 @pytest.fixture
