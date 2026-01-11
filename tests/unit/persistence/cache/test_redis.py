@@ -80,16 +80,10 @@ def test_redis_config_with_password():
 
 def test_redis_config_defaults():
     """Test Redis configuration default values."""
-    config = RedisConfig(db=0)
+    config = RedisConfig()
     assert config.host == "localhost"
     assert config.port == 6379
     assert config.db == 0
-
-
-def test_redis_config_validation_missing_fields():
-    """Test missing required fields raises ValidationError."""
-    with pytest.raises(ValidationError):
-        RedisConfig()  # type: ignore[call-arg] # Missing db
 
 
 def test_redis_config_validation_types():

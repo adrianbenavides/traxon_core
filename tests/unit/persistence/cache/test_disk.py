@@ -3,8 +3,7 @@ import shutil
 
 import pytest
 
-from traxon_core.persistence.cache import Cache
-from traxon_core.persistence.cache.disk import DiskCache
+from traxon_core.persistence.cache import Cache, DiskCache
 
 
 @pytest.fixture

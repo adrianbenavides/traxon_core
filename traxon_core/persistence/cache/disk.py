@@ -3,12 +3,29 @@ from __future__ import annotations
 import os
 import pickle
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import aiofiles
 from beartype import beartype
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from traxon_core.persistence.cache import Cache
+from traxon_core.persistence.cache.base import Cache
+
+
+@beartype
+class DiskConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    type: Literal["disk"] = "disk"
+    path: str = Field(min_length=1)
+    serializer: Literal["json", "pickle"] = "json"
+
+    @field_validator("path")
+    @classmethod
+    def validate_cache_path(cls, v: str) -> str:
+        """Ensure parent directory exists."""
+        path = Path(v).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return str(path)
 
 
 class DiskCache(Cache):

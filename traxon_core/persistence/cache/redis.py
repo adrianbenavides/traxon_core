@@ -1,26 +1,25 @@
 from __future__ import annotations
 
 import pickle
-from typing import Any
+from typing import Any, Literal, Optional
 
 import redis
 import redis.asyncio as async_redis
-import structlog
 from beartype import beartype
 from pydantic import BaseModel, ConfigDict, Field
 
-from traxon_core.persistence.cache import Cache
-
-logger = structlog.get_logger()
+from traxon_core.logs.structlog import logger
+from traxon_core.persistence.cache.base import Cache
 
 
 @beartype
 class RedisConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    type: Literal["redis"] = "redis"
     host: str = Field(default="localhost", min_length=1)
     port: int = Field(default=6379, ge=1, le=65535)
-    db: int = Field(ge=0)
-    password: str | None = None
+    db: int = Field(default=0, ge=0)
+    password: Optional[str] = None
 
 
 class RedisCache(Cache):

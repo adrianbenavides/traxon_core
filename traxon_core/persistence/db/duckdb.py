@@ -1,15 +1,32 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Any, Final, Iterator, Optional, cast
+from pathlib import Path
+from typing import Any, Final, Iterator, Literal, Optional, cast
 
 import duckdb
 import pandas as pd
 from _duckdb import DuckDBPyRelation
 from beartype import beartype
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from traxon_core.persistence import Database
-from traxon_core.persistence.config import DatabaseConfig
+from traxon_core.persistence.db.base import Database
+
+
+@beartype
+class DuckDBConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    type: Literal["duckdb"] = "duckdb"
+    path: str = Field(min_length=1)
+    read_only: bool = False
+
+    @field_validator("path")
+    @classmethod
+    def validate_db_path(cls, v: str) -> str:
+        """Ensure parent directory exists."""
+        path = Path(v).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return str(path)
 
 
 class DuckDbDatabase:
@@ -18,8 +35,8 @@ class DuckDbDatabase:
     """
 
     @beartype
-    def __init__(self, config: DatabaseConfig) -> None:
-        self._config: Final[DatabaseConfig] = config
+    def __init__(self, config: DuckDBConfig) -> None:
+        self._config: Final[DuckDBConfig] = config
         self._conn = duckdb.connect(str(self._config.path))
         self._last_result: Optional[DuckDBPyRelation] = None
 
