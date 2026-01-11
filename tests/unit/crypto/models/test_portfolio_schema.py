@@ -1,5 +1,5 @@
-import polars as pl
 import pandera as pa
+import polars as pl
 import pytest
 
 from traxon_core.crypto.models.instrument import InstrumentType

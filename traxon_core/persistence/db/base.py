@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, Protocol, runtime_checkable
 
-import pandas as pd
+import polars as pl
 
 
 @runtime_checkable
@@ -21,11 +21,11 @@ class Database(Protocol):
         """Fetch a single result row."""
         ...
 
-    def fetchdf(self) -> pd.DataFrame:
+    def fetchdf(self) -> pl.DataFrame:
         """Fetch all results as a pandas DataFrame."""
         ...
 
-    def register_temp_table(self, name: str, df: pd.DataFrame) -> None:
+    def register_temp_table(self, name: str, df: pl.DataFrame) -> None:
         """Register a pandas DataFrame as a temporary table."""
         ...
 

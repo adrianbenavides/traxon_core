@@ -1,25 +1,6 @@
-from typing import Any
-
 import polars as pl
-import pytest
 
-from traxon_core.logs.notifiers import BasePushNotifier, NoOpNotifier
-
-
-class TestNotifier(BasePushNotifier):
-    async def start(self) -> None:
-        pass
-
-    async def stop(self) -> None:
-        pass
-
-    async def send(self, message: object) -> None:
-        self.sent_message = message
-
-    async def send_error(
-        self, error_message: object, exception: Exception | None = None, context: dict[str, Any] | None = None
-    ) -> None:
-        pass
+from traxon_core.logs.notifiers import BasePushNotifier
 
 
 def test_process_notification_polars():

@@ -16,7 +16,7 @@ def test_postgres_config_structure():
             user="user",
             password="password",
             database="db",
-            extra_field="invalid",  # Should fail
+            extra_field="invalid",  # type: ignore # Should fail
         )
 
 
@@ -30,5 +30,5 @@ def test_duckdb_config_structure():
     with pytest.raises(ValidationError):
         DuckDBConfig(
             path="/tmp/db",
-            extra_field="invalid",  # Should fail
+            extra_field="invalid",  # type: ignore # Should fail
         )

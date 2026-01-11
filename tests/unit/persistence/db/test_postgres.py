@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
+import polars as pl
 import pytest
 
 from traxon_core.persistence.db import PostgresConfig, PostgresDatabase
@@ -51,9 +51,9 @@ def test_postgres_database_fetchdf(mock_config, mock_psycopg_conn):
     db.execute("SELECT * FROM users")
     df = db.fetchdf()
 
-    assert isinstance(df, pd.DataFrame)
+    assert isinstance(df, pl.DataFrame)
     assert len(df) == 2
-    assert list(df.columns) == ["id", "name"]
+    assert df.columns == ["id", "name"]
 
 
 def test_postgres_database_transaction(mock_config, mock_psycopg_conn):

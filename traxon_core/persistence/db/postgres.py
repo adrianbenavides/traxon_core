@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, Final, Literal, Optional
 
-import pandas as pd
+import polars as pl
 import psycopg
 from beartype import beartype
 from pydantic import BaseModel, ConfigDict, Field
@@ -54,17 +54,17 @@ class PostgresDatabase:
             return self._cursor.fetchone()
         return None
 
-    def fetchdf(self) -> pd.DataFrame:
-        """Fetch all results as a pandas DataFrame."""
+    def fetchdf(self) -> pl.DataFrame:
+        """Fetch all results as a Polars DataFrame."""
         if self._cursor is not None and self._cursor.description is not None:
             columns = [desc.name for desc in self._cursor.description]
             data = self._cursor.fetchall()
-            return pd.DataFrame(data, columns=columns)
-        return pd.DataFrame()
+            return pl.DataFrame(data, schema=columns, orient="row")
+        return pl.DataFrame()
 
-    def register_temp_table(self, name: str, df: pd.DataFrame) -> None:
+    def register_temp_table(self, name: str, df: pl.DataFrame) -> None:
         """
-        Register a pandas DataFrame as a temporary table.
+        Register a Polars DataFrame as a temporary table.
         Note: In Postgres, this typically involves creating a temp table and inserting data.
         """
         # Minimal implementation: create temp table and insert
@@ -73,7 +73,7 @@ class PostgresDatabase:
         self.execute(f"CREATE TEMPORARY TABLE {name} ({columns}) ON COMMIT PRESERVE ROWS")
 
         # Insert data
-        for _, row in df.iterrows():
+        for row in df.rows():
             placeholders = ", ".join(["%s"] * len(row))
             self.execute(f"INSERT INTO {name} VALUES ({placeholders})", list(row))
 

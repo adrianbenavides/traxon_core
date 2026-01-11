@@ -3,6 +3,7 @@ from typing import Any, Literal, Optional, cast
 
 import exchange_calendars as ecals
 import pandas as pd
+import polars as pl
 from beartype import beartype
 
 
@@ -39,23 +40,26 @@ class ExchangeCalendar:
             self._last_session = self._calendar.last_session.date()
 
     @beartype
-    def get_month_trading_days(self, today: date) -> list[date]:
+    def get_month_trading_days(self, today: date) -> pl.Series:
         start_of_month: date = today.replace(day=1)
         end_of_month: date = (today.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
 
         self._ensure_bounds(start_of_month)
         self._ensure_bounds(end_of_month)
 
-        trading_days: pd.DatetimeIndex = self.calendar.sessions_in_range(
+        trading_days_pd: pd.DatetimeIndex = self.calendar.sessions_in_range(
             pd.Timestamp(start_of_month), pd.Timestamp(end_of_month)
         )
-        return [d.date() for d in trading_days]
+        return pl.from_pandas(trading_days_pd.to_series()).dt.date().rename("trading_days")
 
     @beartype
     def is_nth_trading_day(self, n: int, today: datetime) -> bool:
         today_date: date = today.date()
         trading_days = self.get_month_trading_days(today_date)
-        return today_date in trading_days and trading_days.index(today_date) == n - 1
+        matches = (trading_days == today_date).arg_true()
+        if len(matches) == 0:
+            return False
+        return bool(matches.item() == n - 1)
 
     @beartype
     def n_trading_days_ago(self, n: int, today: datetime) -> date:
@@ -69,8 +73,8 @@ class ExchangeCalendar:
         trading_days_pd: pd.DatetimeIndex = self.calendar.sessions_in_range(
             pd.Timestamp(start), pd.Timestamp(today_date)
         )
-        trading_days: list[date] = [d.date() for d in trading_days_pd]
-        return trading_days[-(n + 1)]
+        trading_days = pl.from_pandas(trading_days_pd.to_series()).dt.date()
+        return cast(date, trading_days.gather(len(trading_days) - (n + 1)).item())
 
     @beartype
     def curr_trading_day(self, today: datetime) -> date:
@@ -95,13 +99,13 @@ class ExchangeCalendar:
         today_trading_day: date = self.curr_trading_day(today)
         today_date: date = today.date()
         trading_days = self.get_month_trading_days(today_date)
-        last_nth_day: date = trading_days[n - 1]
+        last_nth_day: date = trading_days.gather(n - 1).item()
 
         # If the nth trading day is in the future, get the nth trading day of last month
         if last_nth_day > today_trading_day:
             last_day_last_month: date = today_date.replace(day=1) - timedelta(days=1)
             trading_days = self.get_month_trading_days(last_day_last_month)
-            last_nth_day = trading_days[n - 1]
+            last_nth_day = trading_days.gather(n - 1).item()
 
         return last_nth_day
 
@@ -114,11 +118,13 @@ class ExchangeCalendar:
     def is_eom(self, today: datetime) -> bool:
         today_date: date = today.date()
         trading_days = self.get_month_trading_days(today_date)
-        return today_date in trading_days and today_date == trading_days[-1]
+        if len(trading_days) == 0:
+            return False
+        return bool(today_date == trading_days.gather(len(trading_days) - 1).item())
 
     @beartype
     def last_eom(self, today: datetime) -> date:
         today_date: date = today.date()
         last_day_last_month: date = today_date.replace(day=1) - timedelta(days=1)
         trading_days = self.get_month_trading_days(last_day_last_month)
-        return trading_days[-1]
+        return cast(date, trading_days.gather(len(trading_days) - 1).item())

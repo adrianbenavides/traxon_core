@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Final, Iterator, Literal, Optional, cast
 
 import duckdb
-import pandas as pd
+import polars as pl
 from _duckdb import DuckDBPyRelation
 from beartype import beartype
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -55,14 +55,14 @@ class DuckDbDatabase:
             return self._last_result.fetchone()
         return None
 
-    def fetchdf(self) -> pd.DataFrame:
-        """Fetch all results as a pandas DataFrame."""
+    def fetchdf(self) -> pl.DataFrame:
+        """Fetch all results as a Polars DataFrame."""
         if self._last_result is not None:
-            return self._last_result.fetchdf()
-        return pd.DataFrame()
+            return self._last_result.pl()
+        return pl.DataFrame()
 
-    def register_temp_table(self, name: str, df: pd.DataFrame) -> None:
-        """Register a pandas DataFrame as a temporary table."""
+    def register_temp_table(self, name: str, df: pl.DataFrame) -> None:
+        """Register a Polars DataFrame as a temporary table."""
         self._conn.register(name, df)
 
     def commit(self) -> None:
@@ -81,6 +81,7 @@ class DuckDbDatabase:
     def __del__(self) -> None:
         """Ensure connection is closed on deletion."""
         try:
-            self._conn.close()
+            if hasattr(self, "_conn"):
+                self._conn.close()
         except Exception:
             pass

@@ -1,6 +1,7 @@
+from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 
-import pytest
+import polars as pl
 
 from traxon_core.trading_dates import ExchangeCalendar
 
@@ -36,8 +37,6 @@ class TestExchangeCalendar:
 
     def test_get_month_trading_days(self):
         """Test that get_month_trading_days returns correct days for a given month."""
-        from datetime import date
-
         exchange_name = "XNYS"
         calendar = ExchangeCalendar(exchange_name)
 
@@ -45,17 +44,15 @@ class TestExchangeCalendar:
         test_date = date(2024, 1, 10)
         trading_days = calendar.get_month_trading_days(test_date)
 
-        assert isinstance(trading_days, list)
-        assert all(isinstance(d, date) for d in trading_days)
-        assert date(2024, 1, 1) not in trading_days
-        assert date(2024, 1, 2) in trading_days
-        assert date(2024, 1, 15) not in trading_days
+        assert isinstance(trading_days, pl.Series)
+        assert trading_days.dtype == pl.Date
+        assert date(2024, 1, 1) not in trading_days.to_list()
+        assert date(2024, 1, 2) in trading_days.to_list()
+        assert date(2024, 1, 15) not in trading_days.to_list()
         assert len(trading_days) == 21  # 23 weekdays - 2 holidays
 
     def test_is_nth_trading_day(self):
         """Test is_nth_trading_day logic."""
-        from datetime import datetime
-
         exchange_name = "XNYS"
         calendar = ExchangeCalendar(exchange_name)
 
@@ -68,8 +65,6 @@ class TestExchangeCalendar:
 
     def test_n_trading_days_ago(self):
         """Test n_trading_days_ago logic."""
-        from datetime import date, datetime
-
         exchange_name = "XNYS"
         calendar = ExchangeCalendar(exchange_name)
 
@@ -80,8 +75,6 @@ class TestExchangeCalendar:
 
     def test_curr_trading_day(self):
         """Test curr_trading_day logic."""
-        from datetime import date, datetime
-
         exchange_name = "XNYS"
         calendar = ExchangeCalendar(exchange_name)
 
@@ -91,8 +84,6 @@ class TestExchangeCalendar:
 
     def test_is_trading_day(self):
         """Test is_trading_day logic."""
-        from datetime import datetime
-
         exchange_name = "XNYS"
         calendar = ExchangeCalendar(exchange_name)
 
@@ -102,8 +93,6 @@ class TestExchangeCalendar:
 
     def test_dynamic_resizing(self):
         """Test that the calendar is reloaded when out of bounds."""
-        from datetime import datetime
-
         exchange_name = "XNYS"
         calendar = ExchangeCalendar(exchange_name)
 

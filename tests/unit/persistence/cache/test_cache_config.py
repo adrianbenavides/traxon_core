@@ -16,7 +16,7 @@ def test_redis_config_structure():
             port=6379,
             db=0,
             password="password",
-            extra_field="invalid",  # Should fail
+            extra_field="invalid",  # type: ignore # Should fail
         )
 
 
@@ -31,5 +31,5 @@ def test_disk_config_structure():
         DiskConfig(
             path="/tmp/cache",
             serializer="json",
-            extra_field="invalid",  # Should fail
+            extra_field="invalid",  # type: ignore # Should fail
         )
