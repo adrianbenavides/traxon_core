@@ -1,8 +1,7 @@
 from decimal import Decimal
 
 from beartype import beartype
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from traxon_core.crypto.models.exchange_id import ExchangeId
 
 from .execution_type import OrderExecutionType
@@ -22,7 +21,13 @@ class OrderRequest(BaseModel):
     side: OrderSide = Field(description="Order side (buy or sell)")
     order_type: OrderType = Field(description="Type of order (limit or market)")
     amount: Decimal = Field(gt=0, description="Amount to trade in base currency")
-    price: Decimal | None = Field(default=None, description="Limit price (required for limit orders)")
+    price: Decimal | None = Field(
+        default=None,
+        description="Current price."
+        "Used in maker limit orders with prices crossing the spread."
+        "Otherwise, price is set automatically to the market price "
+        "for market orders and limit orders within the spread.",
+    )
     execution_type: OrderExecutionType = Field(description="Execution type (taker or maker)")
     params: dict[str, str] = Field(
         default_factory=dict,
@@ -42,10 +47,3 @@ class OrderRequest(BaseModel):
         if isinstance(v, Decimal):
             return v
         return Decimal(str(v))
-
-    @model_validator(mode="after")
-    def validate_price_for_limit_orders(self) -> "OrderRequest":
-        """Ensure price is present for limit orders."""
-        if self.order_type == OrderType.LIMIT and self.price is None:
-            raise ValueError("Price is required for limit orders")
-        return self

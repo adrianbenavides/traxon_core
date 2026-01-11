@@ -54,6 +54,7 @@ class DefaultOrderExecutor:
             if order.order_type == OrderType.MARKET:
                 report = await executor.execute_taker_order(exchange, order)
             else:
+                # TODO: handle orders with prices crossing the spread -> should place the order and return
                 report = await executor.execute_maker_order(exchange, order)
 
             if report is None:
