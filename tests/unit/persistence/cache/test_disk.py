@@ -3,7 +3,7 @@ import shutil
 
 import pytest
 
-from traxon_core.persistence.cache import Cache, DiskCache
+from traxon_core.persistence.cache import Cache, DiskCache, DiskConfig
 
 
 @pytest.fixture
@@ -20,14 +20,16 @@ def temp_cache_dir():
 @pytest.mark.asyncio
 async def test_disk_cache_implements_protocol(temp_cache_dir):
     """Verify that DiskCache implements the Cache protocol."""
-    cache = DiskCache(cache_dir=temp_cache_dir)
+    config = DiskConfig(path=temp_cache_dir)
+    cache = DiskCache(config)
     assert isinstance(cache, Cache)
 
 
 @pytest.mark.asyncio
 async def test_disk_cache_save_load(temp_cache_dir):
     """Test saving and loading data."""
-    cache = DiskCache(cache_dir=temp_cache_dir)
+    config = DiskConfig(path=temp_cache_dir)
+    cache = DiskCache(config)
     key = "test_key"
     data = {"foo": "bar", "nest": [1, 2, 3]}
 
@@ -40,7 +42,8 @@ async def test_disk_cache_save_load(temp_cache_dir):
 @pytest.mark.asyncio
 async def test_disk_cache_exists_delete(temp_cache_dir):
     """Test checking existence and deleting data."""
-    cache = DiskCache(cache_dir=temp_cache_dir)
+    config = DiskConfig(path=temp_cache_dir)
+    cache = DiskCache(config)
     key = "test_delete"
     data = "some data"
 

@@ -22,11 +22,11 @@ class Database(Protocol):
         ...
 
     def fetchdf(self) -> pl.DataFrame:
-        """Fetch all results as a pandas DataFrame."""
+        """Fetch all results as a Polars DataFrame."""
         ...
 
     def register_temp_table(self, name: str, df: pl.DataFrame) -> None:
-        """Register a pandas DataFrame as a temporary table."""
+        """Register a Polars DataFrame as a temporary table."""
         ...
 
     def commit(self) -> None:

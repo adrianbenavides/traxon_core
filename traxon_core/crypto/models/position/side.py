@@ -2,12 +2,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING
 
 from beartype import beartype
 
-if TYPE_CHECKING:
-    from traxon_core.crypto.models.order.side import OrderSide
+from traxon_core.crypto.models.order.side import OrderSide
 
 
 class PositionSide(str, Enum):
