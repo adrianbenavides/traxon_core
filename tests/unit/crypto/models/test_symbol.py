@@ -1,5 +1,3 @@
-import pytest
-
 from traxon_core.crypto.models.symbol import BaseQuote, Symbol
 
 

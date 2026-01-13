@@ -1,11 +1,8 @@
-import time
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ccxt.async_support import Exchange as CcxtExchange  # type: ignore[import-untyped]
-from ccxt.base.types import Market as CcxtMarket  # type: ignore[import-untyped]
-from ccxt.base.types import OpenInterest
 
 from traxon_core.crypto.exchanges.api_patch import BaseExchangeApiPatch
 from traxon_core.crypto.exchanges.api_patch.bybit import BybitExchangeApiPatches
@@ -19,7 +16,6 @@ from traxon_core.crypto.models.account import AccountEquity
 from traxon_core.crypto.models.balance import Balance
 from traxon_core.crypto.models.exchange_id import ExchangeId
 from traxon_core.crypto.models.position.position import Position
-from traxon_core.crypto.models.position.side import PositionSide
 from traxon_core.crypto.models.symbol import Symbol
 
 
@@ -167,7 +163,7 @@ async def test_load_markets_retry(exchange, mock_ccxt_exchange):
         side_effect=[Exception("Fail"), Exception("Fail"), {"BTC/USDT": {"symbol": "BTC/USDT"}}]
     )
     with patch("asyncio.sleep", AsyncMock()):
-        markets = await exchange.load_markets()
+        await exchange.load_markets()
     assert mock_ccxt_exchange.load_markets.call_count == 3
 
 

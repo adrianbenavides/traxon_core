@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import polars as pl
 
-from traxon_core.trading_dates import ExchangeCalendar
+from traxon_core.exchange_calendar import ExchangeCalendar
 
 
 class TestExchangeCalendar:
@@ -98,7 +98,6 @@ class TestExchangeCalendar:
 
         # Load initially
         cal = calendar.calendar
-        initial_first = cal.first_session
         initial_last = cal.last_session
 
         # Request a date far in the future (Sunday, Jan 14th 2029)

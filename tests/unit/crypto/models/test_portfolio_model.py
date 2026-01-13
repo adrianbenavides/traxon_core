@@ -1,7 +1,5 @@
 from decimal import Decimal
 
-import pytest
-
 from traxon_core.crypto.models.balance import Balance
 from traxon_core.crypto.models.exchange_id import ExchangeId
 from traxon_core.crypto.models.market_info import MarketInfo

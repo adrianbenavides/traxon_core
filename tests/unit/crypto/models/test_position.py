@@ -1,8 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-import pytest
-
 from traxon_core.crypto.models.exchange_id import ExchangeId
 from traxon_core.crypto.models.market_info import MarketInfo
 from traxon_core.crypto.models.position.position import Position

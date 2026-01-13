@@ -11,7 +11,6 @@ from traxon_core.crypto.models.order import (
     OrderValidationError,
     SizedOrderBuilder,
 )
-from traxon_core.crypto.models.symbol import Symbol
 
 
 @pytest.fixture

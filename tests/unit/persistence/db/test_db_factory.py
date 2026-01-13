@@ -11,7 +11,7 @@ def test_create_database_postgres():
     config = PostgresConfig(
         host="localhost", port=5432, user="test", password="testpassword", database="testdb"
     )
-    with patch("psycopg.connect") as mock_connect:
+    with patch("psycopg.connect"):
         db = create_database(config)
         assert isinstance(db, PostgresDatabase)
 
