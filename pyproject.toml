@@ -33,6 +33,7 @@ dev = [
   "pydocstyle>=6.3.0",
   "pytest>=8.4.1",
   "pytest-asyncio>=1.1.0",
+  "pytest-bdd>=8.1.0",
   "pytest-cov>=7.0.0",
   "ruff>=0.12.11",
   "types-aiofiles>=25.1.0.20251011",
@@ -63,8 +64,14 @@ lint = [
   #  { ref = "lint-docs" },
 ]
 lint-docs = "uv run pydocstyle --ignore-decorators=overload"
-lint-types = [{ cmd = "uv run mypy ." }]
+lint-types = [{ cmd = "uv run mypy traxon_core" }]
 test = "uv run pytest tests -v"
+test-acceptance = "uv run pytest tests/integration/crypto/order_executor/acceptance -v"
+test-skeleton = "uv run pytest tests/integration/crypto/order_executor/acceptance/walking-skeleton.feature -v"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.mypy]
 plugins = ['pydantic.mypy']

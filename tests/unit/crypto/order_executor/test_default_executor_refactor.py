@@ -73,6 +73,8 @@ async def test_default_executor_executes_request_and_notifies(executor_config, m
         filled=Decimal("0.1"),
         remaining=Decimal("0"),
         timestamp=123456789,
+        exchange_id="bybit",
+        fill_latency_ms=0,
     )
 
     mock_api_executor = MagicMock(spec=OrderExecutor)

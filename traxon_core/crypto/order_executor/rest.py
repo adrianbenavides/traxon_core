@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict
+from typing import Any
 
 from beartype import beartype
 
@@ -10,6 +10,7 @@ from traxon_core.crypto.exchanges.exchange import Exchange
 from traxon_core.crypto.models.order import OrderRequest, OrderType
 from traxon_core.crypto.order_executor.base import OrderExecutorBase
 from traxon_core.crypto.order_executor.config import ExecutorConfig
+from traxon_core.crypto.order_executor.event_bus import OrderEventBus, OrderState
 from traxon_core.crypto.order_executor.exceptions import (
     OrderCreationError,
     OrderExecutorError,
@@ -21,8 +22,19 @@ from traxon_core.crypto.order_executor.models import (
     OrderStatus,
 )
 
+# Adaptive polling thresholds
+_FAST_POLL_INTERVAL = 0.2  # seconds during first 10s
+_SLOW_POLL_INTERVAL = 1.0  # seconds after 10s
+_FAST_POLL_WINDOW = 10.0  # seconds
 
-class OrderState(str, Enum):
+# Exponential backoff delays for consecutive fetch_order failures
+_FETCH_BACKOFF_DELAYS = [0.5, 1.0, 2.0, 4.0]
+
+# Maximum attempts for create_market_order (taker outer retry loop)
+_TAKER_CREATE_MAX_ATTEMPTS = 3
+
+
+class _OrderState(str, Enum):
     CREATE_ORDER = "CREATE_ORDER"
     MONITORING_ORDER = "MONITORING_ORDER"
     UPDATING_ORDER = "UPDATING_ORDER"
@@ -37,26 +49,110 @@ class RestApiOrderExecutor(OrderExecutorBase):
     """
 
     @beartype
-    def __init__(self, config: ExecutorConfig) -> None:
-        super().__init__(config)
-        self.retry_interval_seconds: float = 1.0
+    def __init__(self, config: ExecutorConfig, event_bus: OrderEventBus | None = None) -> None:
+        super().__init__(config, event_bus=event_bus)
 
-    @beartype
-    def _to_execution_report(self, order_dict: dict[str, Any]) -> ExecutionReport:
-        """Convert CCXT order dictionary to ExecutionReport model."""
-        return ExecutionReport(
-            id=str(order_dict["id"]),
-            symbol=str(order_dict["symbol"]),
-            status=OrderStatus(order_dict["status"]),
-            amount=Decimal(str(order_dict["amount"])),
-            filled=Decimal(str(order_dict["filled"])),
-            remaining=Decimal(str(order_dict["remaining"])),
-            average_price=Decimal(str(order_dict["price"])) if order_dict.get("price") else None,
-            last_price=Decimal(str(order_dict["lastTradePrice"]))
-            if order_dict.get("lastTradePrice")
-            else None,
-            timestamp=int(order_dict["timestamp"]),
-        )
+    def check_timeout(self, start_time: datetime, symbol: str, order_type: str = "execution") -> None:
+        """Override to use this module's datetime (enables mocking in tests)."""
+        from traxon_core.crypto.order_executor.exceptions import OrderTimeoutError
+
+        if datetime.now() - start_time > self.timeout_duration:
+            raise OrderTimeoutError(symbol, order_type, self.timeout_duration.total_seconds())
+
+    def _adaptive_sleep_interval(self, elapsed_seconds: float) -> float:
+        """Return 0.2s for the first 10s, 1.0s thereafter."""
+        return _FAST_POLL_INTERVAL if elapsed_seconds < _FAST_POLL_WINDOW else _SLOW_POLL_INTERVAL
+
+    async def _poll_until_closed(
+        self,
+        exchange: Exchange,
+        order_id: str,
+        symbol: str,
+        side_ccxt: str,
+        exchange_id: str,
+        start_time: datetime,
+        log_prefix: str,
+    ) -> ExecutionReport:
+        """
+        Poll fetch_order until CLOSED or REJECTED/CANCELED.
+        On consecutive failures applies exponential backoff [0.5, 1.0, 2.0, 4.0]
+        then propagates the error after 4 failures.
+        """
+        fetch_failures = 0
+
+        while True:
+            self.check_timeout(start_time, symbol, "taker-poll")
+            elapsed = (datetime.now() - start_time).total_seconds()
+
+            try:
+                status_dict = await exchange.api.fetch_order(order_id, symbol)
+                fetch_failures = 0
+                report = self._build_execution_report(status_dict, exchange_id, start_time)
+
+                if report.status == OrderStatus.CLOSED:
+                    self.logger.info(f"{log_prefix} - taker order filled")
+                    self._emit(
+                        self._make_event(
+                            order_id=order_id,
+                            exchange_id=exchange_id,
+                            symbol=symbol,
+                            side=side_ccxt,
+                            state=OrderState.FILLED,
+                            event_name="order_fill_complete",
+                            submit_time=start_time,
+                            fill_qty=report.filled,
+                            fill_price=report.average_price,
+                        )
+                    )
+                    return report
+
+                if report.status in [OrderStatus.REJECTED, OrderStatus.CANCELED]:
+                    self._emit(
+                        self._make_event(
+                            order_id=order_id,
+                            exchange_id=exchange_id,
+                            symbol=symbol,
+                            side=side_ccxt,
+                            state=OrderState.FAILED,
+                            event_name="order_failed",
+                            submit_time=start_time,
+                        )
+                    )
+                    raise OrderCreationError(symbol, "market", f"Order was {report.status}")
+
+                if report.filled > 0:
+                    self._emit(
+                        self._make_event(
+                            order_id=order_id,
+                            exchange_id=exchange_id,
+                            symbol=symbol,
+                            side=side_ccxt,
+                            state=OrderState.PARTIALLY_FILLED,
+                            event_name="order_fill_partial",
+                            submit_time=start_time,
+                            fill_qty=report.filled,
+                            fill_price=report.average_price,
+                        )
+                    )
+
+            except (OrderCreationError, OrderExecutorError):
+                raise
+            except Exception as e:
+                fetch_failures += 1
+                backoff_index = min(fetch_failures - 1, len(_FETCH_BACKOFF_DELAYS) - 1)
+                backoff_delay = _FETCH_BACKOFF_DELAYS[backoff_index]
+                self.logger.warning(
+                    f"{log_prefix} - failed to fetch order status (attempt {fetch_failures}): {e}"
+                )
+                await asyncio.sleep(backoff_delay)
+                if fetch_failures >= len(_FETCH_BACKOFF_DELAYS):
+                    raise OrderExecutorError(
+                        f"fetch_order failed {fetch_failures} consecutive times for {symbol}: {e}"
+                    ) from e
+                continue
+
+            sleep_interval = self._adaptive_sleep_interval(elapsed)
+            await asyncio.sleep(sleep_interval)
 
     @beartype
     async def _fetch_order_book_update(
@@ -87,14 +183,14 @@ class RestApiOrderExecutor(OrderExecutorBase):
         self.validate_request(request)
         symbol_str = request.symbol
         side_ccxt = request.side.to_ccxt()
+        exchange_id = str(exchange.api.id)
         log_prefix = self.log_prefix(exchange, symbol_str, request.side)
 
         start_time = datetime.now()
         order_id: str | None = None
         order_book_state: OrderBookState | None = None
-        current_state: OrderState = OrderState.CREATE_ORDER
+        current_state: _OrderState = _OrderState.CREATE_ORDER
 
-        # Clean up any existing orders
         await self._cancel_pending_orders(exchange, symbol_str)
         self.logger.info(f"{log_prefix} - starting REST API maker order execution")
 
@@ -102,13 +198,14 @@ class RestApiOrderExecutor(OrderExecutorBase):
             while True:
                 self.check_timeout(start_time, symbol_str, "maker")
                 elapsed_seconds = ElapsedSeconds((datetime.now() - start_time).total_seconds())
+                sleep_interval = self._adaptive_sleep_interval(elapsed_seconds)
 
-                if current_state == OrderState.CREATE_ORDER:
+                if current_state == _OrderState.CREATE_ORDER:
                     new_state = await self._fetch_order_book_update(
                         exchange, symbol_str, request, order_book_state, elapsed_seconds
                     )
                     if not new_state:
-                        await asyncio.sleep(self.retry_interval_seconds)
+                        await asyncio.sleep(sleep_interval)
                         continue
 
                     order_book_state = new_state
@@ -118,7 +215,7 @@ class RestApiOrderExecutor(OrderExecutorBase):
                         self.logger.debug(
                             f"{log_prefix} - spread too high: {order_book_state.spread_pct:.2%}"
                         )
-                        await asyncio.sleep(self.retry_interval_seconds)
+                        await asyncio.sleep(sleep_interval)
                         continue
 
                     self.logger.debug(
@@ -126,74 +223,139 @@ class RestApiOrderExecutor(OrderExecutorBase):
                         f"with size {request.amount:.6f}"
                     )
                     try:
-                        # Prepare params
-                        params: Dict[str, Any] = {}
-                        order_status_dict = await exchange.api.create_limit_order(
+                        order_dict = await exchange.api.create_limit_order(
                             symbol=symbol_str,
                             side=side_ccxt,
                             amount=float(request.amount),
                             price=float(order_book_state.best_price),
-                            params=params,
+                            params=request.params,
                         )
-                        order_id = order_status_dict["id"]
+                        order_id = order_dict["id"]
                         self.logger.info(f"{log_prefix} - created limit order (id={order_id})")
-                        current_state = OrderState.MONITORING_ORDER
+                        self._emit(
+                            self._make_event(
+                                order_id=str(order_id),
+                                exchange_id=exchange_id,
+                                symbol=symbol_str,
+                                side=side_ccxt,
+                                state=OrderState.SUBMITTED,
+                                event_name="order_submitted",
+                                submit_time=start_time,
+                            )
+                        )
+                        current_state = _OrderState.MONITORING_ORDER
                     except Exception as e:
                         self.logger.warning(f"{log_prefix} - failed to create limit order: {e}")
-                        await asyncio.sleep(self.retry_interval_seconds)
+                        await asyncio.sleep(sleep_interval)
 
-                elif current_state == OrderState.MONITORING_ORDER and order_id:
+                elif current_state == _OrderState.MONITORING_ORDER and order_id:
+                    fetch_failures = 0
                     try:
                         order_status_dict = await exchange.api.fetch_order(order_id, symbol_str)
-                        report = self._to_execution_report(order_status_dict)
+                        report = self._build_execution_report(order_status_dict, exchange_id, start_time)
 
                         if report.status == OrderStatus.CLOSED:
                             self.logger.info(f"{log_prefix} - order filled")
+                            self._emit(
+                                self._make_event(
+                                    order_id=str(order_id),
+                                    exchange_id=exchange_id,
+                                    symbol=symbol_str,
+                                    side=side_ccxt,
+                                    state=OrderState.FILLED,
+                                    event_name="order_fill_complete",
+                                    submit_time=start_time,
+                                    fill_qty=report.filled,
+                                    fill_price=report.average_price,
+                                )
+                            )
                             return report
                         elif report.status in [OrderStatus.REJECTED, OrderStatus.CANCELED]:
                             self.logger.warning(f"{log_prefix} - order failed with status: {report.status}")
+                            self._emit(
+                                self._make_event(
+                                    order_id=str(order_id),
+                                    exchange_id=exchange_id,
+                                    symbol=symbol_str,
+                                    side=side_ccxt,
+                                    state=OrderState.FAILED,
+                                    event_name="order_failed",
+                                    submit_time=start_time,
+                                )
+                            )
                             order_id = None
-                            current_state = OrderState.CREATE_ORDER
+                            current_state = _OrderState.CREATE_ORDER
                             continue
+                        elif report.filled > 0:
+                            self._emit(
+                                self._make_event(
+                                    order_id=str(order_id),
+                                    exchange_id=exchange_id,
+                                    symbol=symbol_str,
+                                    side=side_ccxt,
+                                    state=OrderState.PARTIALLY_FILLED,
+                                    event_name="order_fill_partial",
+                                    submit_time=start_time,
+                                    fill_qty=report.filled,
+                                    fill_price=report.average_price,
+                                )
+                            )
 
                         # Check if price update is needed
                         new_state = await self._fetch_order_book_update(
                             exchange, symbol_str, request, order_book_state, elapsed_seconds
                         )
                         if new_state:
-                            order_book_state = new_state
-                            current_state = OrderState.UPDATING_ORDER
+                            old_price = (
+                                Decimal(str(order_book_state.best_price))
+                                if order_book_state
+                                else Decimal("0")
+                            )
+                            new_price = Decimal(str(new_state.best_price))
+                            if self._check_should_reprice(
+                                order_id=str(order_id),
+                                exchange_id=exchange_id,
+                                symbol=symbol_str,
+                                side=side_ccxt,
+                                submit_time=start_time,
+                                old_price=old_price,
+                                new_price=new_price,
+                                elapsed_seconds=float(elapsed_seconds),
+                            ):
+                                order_book_state = new_state
+                                current_state = _OrderState.UPDATING_ORDER
 
                     except Exception as e:
-                        self.logger.warning(f"{log_prefix} - failed to fetch order status: {e}")
-                        await asyncio.sleep(self.retry_interval_seconds)
+                        fetch_failures += 1
+                        backoff_index = min(fetch_failures - 1, len(_FETCH_BACKOFF_DELAYS) - 1)
+                        backoff_delay = _FETCH_BACKOFF_DELAYS[backoff_index]
+                        self.logger.warning(
+                            f"{log_prefix} - failed to fetch order status (attempt {fetch_failures}): {e}"
+                        )
+                        await asyncio.sleep(backoff_delay)
+                        if fetch_failures >= len(_FETCH_BACKOFF_DELAYS):
+                            raise
 
-                elif current_state == OrderState.UPDATING_ORDER and order_id and order_book_state:
+                elif current_state == _OrderState.UPDATING_ORDER and order_id and order_book_state:
                     try:
-                        # For simplicity in this first refactor, we cancel and replace
-                        # Later we can add back editOrder support check if it's important
                         await self._cancel_pending_orders(exchange, symbol_str, order_id)
                         order_id = None
-                        current_state = OrderState.WAIT_UNTIL_ORDER_CANCELLED
+                        current_state = _OrderState.WAIT_UNTIL_ORDER_CANCELLED
                     except Exception as e:
                         self.logger.warning(f"{log_prefix} - failed to initiate update (cancel): {e}")
-                        current_state = OrderState.MONITORING_ORDER
+                        current_state = _OrderState.MONITORING_ORDER
 
-                elif current_state == OrderState.WAIT_UNTIL_ORDER_CANCELLED:
-                    # We already cancelled in UPDATING_ORDER, just wait a bit and go back to CREATE
-                    await asyncio.sleep(self.retry_interval_seconds)
-                    current_state = OrderState.CREATE_ORDER
+                elif current_state == _OrderState.WAIT_UNTIL_ORDER_CANCELLED:
+                    await asyncio.sleep(sleep_interval)
+                    current_state = _OrderState.CREATE_ORDER
 
-                await asyncio.sleep(self.retry_interval_seconds)
+                await asyncio.sleep(sleep_interval)
 
         except OrderExecutorError:
-            # Re-raise managed executor errors
             raise
         except Exception as e:
-            # Fallback for unexpected errors
             self.logger.info(f"{log_prefix} - maker execution interrupted, switching to market order: {e}")
             await self._cancel_pending_orders(exchange, symbol_str, order_id=order_id)
-            # Transition to taker request
             taker_request = request.model_copy(update={"order_type": OrderType.MARKET})
             return await self.execute_taker_order(exchange, taker_request)
         finally:
@@ -203,54 +365,88 @@ class RestApiOrderExecutor(OrderExecutorBase):
     async def execute_taker_order(self, exchange: Exchange, request: OrderRequest) -> ExecutionReport:
         """
         Execute a taker order (market order) using REST API calls.
+
+        Attempts to create the market order up to _TAKER_CREATE_MAX_ATTEMPTS times.
+        Once an order_id is obtained, polls with exponential backoff on fetch_order
+        failures: delays [0.5, 1.0, 2.0, 4.0]. After 4 consecutive failures the
+        error is propagated.
         """
         self.validate_request(request)
         symbol_str = request.symbol
         side_ccxt = request.side.to_ccxt()
+        exchange_id = str(exchange.api.id)
         log_prefix = self.log_prefix(exchange, symbol_str, request.side)
 
         start_time = datetime.now()
         await self._cancel_pending_orders(exchange, symbol_str)
         self.logger.info(f"{log_prefix} - starting REST API taker order execution")
 
-        attempt = 0
-        max_attempts = 3
+        create_attempt = 0
 
-        while attempt < max_attempts:
+        while create_attempt < _TAKER_CREATE_MAX_ATTEMPTS:
             self.check_timeout(start_time, symbol_str, "taker")
             try:
-                params: Dict[str, Any] = {}
                 order_dict = await exchange.api.create_market_order(
                     symbol=symbol_str,
                     side=side_ccxt,
                     amount=float(request.amount),
-                    params=params,
+                    params=request.params,
+                )
+                order_id = str(order_dict["id"])
+                self._emit(
+                    self._make_event(
+                        order_id=order_id,
+                        exchange_id=exchange_id,
+                        symbol=symbol_str,
+                        side=side_ccxt,
+                        state=OrderState.SUBMITTED,
+                        event_name="order_submitted",
+                        submit_time=start_time,
+                    )
                 )
 
-                # Market orders might not be filled immediately on some exchanges?
-                # Usually they are. Let's poll until closed.
-                order_id = str(order_dict["id"])
+                return await self._poll_until_closed(
+                    exchange=exchange,
+                    order_id=order_id,
+                    symbol=symbol_str,
+                    side_ccxt=side_ccxt,
+                    exchange_id=exchange_id,
+                    start_time=start_time,
+                    log_prefix=log_prefix,
+                )
 
-                while True:
-                    self.check_timeout(start_time, symbol_str, "taker-poll")
-                    status_dict = await exchange.api.fetch_order(order_id, symbol_str)
-                    report = self._to_execution_report(status_dict)
-
-                    if report.status == OrderStatus.CLOSED:
-                        self.logger.info(f"{log_prefix} - taker order filled")
-                        return report
-                    elif report.status in [OrderStatus.REJECTED, OrderStatus.CANCELED]:
-                        raise OrderCreationError(symbol_str, "market", f"Order was {report.status}")
-
-                    await asyncio.sleep(self.retry_interval_seconds)
-
+            except (OrderCreationError, OrderExecutorError):
+                self._emit(
+                    self._make_event(
+                        order_id="unknown",
+                        exchange_id=exchange_id,
+                        symbol=symbol_str,
+                        side=side_ccxt,
+                        state=OrderState.FAILED,
+                        event_name="order_failed",
+                        submit_time=start_time,
+                    )
+                )
+                raise
             except Exception as e:
-                attempt += 1
-                self.logger.warning(f"{log_prefix} - taker attempt {attempt} failed: {e}")
-                if attempt >= max_attempts:
+                create_attempt += 1
+                self.logger.warning(f"{log_prefix} - taker create attempt {create_attempt} failed: {e}")
+                if create_attempt >= _TAKER_CREATE_MAX_ATTEMPTS:
+                    self._emit(
+                        self._make_event(
+                            order_id="unknown",
+                            exchange_id=exchange_id,
+                            symbol=symbol_str,
+                            side=side_ccxt,
+                            state=OrderState.FAILED,
+                            event_name="order_failed",
+                            submit_time=start_time,
+                        )
+                    )
                     raise OrderCreationError(symbol_str, "market", str(e))
-                await asyncio.sleep(self.retry_interval_seconds * attempt)
+                elapsed = (datetime.now() - start_time).total_seconds()
+                await asyncio.sleep(self._adaptive_sleep_interval(elapsed))
 
         raise OrderExecutorError(
-            f"Failed to execute taker order for {symbol_str} after {max_attempts} attempts"
+            f"Failed to execute taker order for {symbol_str} after {_TAKER_CREATE_MAX_ATTEMPTS} attempts"
         )
